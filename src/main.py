@@ -229,18 +229,21 @@ def tokenize(expression: str) -> list[str]:
     return tokens
 
 def calc(expression: str) -> float | str:
-    expression = expression.replace(" ", "")  # remove spaces
-
+    expression = expression.replace(" =", "=")
     expression = compile_functions(expression)
 
+    if ";" in expression:
+        if not check_vars(expression):
+            return "undefined"
+        expression = compile_vars(expression)
+    expression = expression.replace(" ", "")  # remove spaces
     if not (expression[0].isdigit() or expression[0] in '-+('+''.join(cst.FUNCTIONS)):  # check if beginning is OK
         logger.exception(SyntaxError("Must begin with unary operation or number"))
         return "undefined"
     # parentheses check
     if not check_parenthesis(expression):
         return "undefined"
-    if not check_vars(expression):
-        return "undefined"
+
     tokens = tokenize(expression)
     if len(tokens)==0:
         return "undefined"
@@ -279,17 +282,35 @@ def check_vars(expression: str) -> bool:
     :param expression: expression to check. Syntax: let x = ...; let y = ...; x+y
     :return: True if vars do not overshadow DFN else False
     """
-    if ";" not in expression:
-        return True
-    expression = expression.replace(" =", "=")
     splitted = expression.split(";")
 
     for var in splitted[:-1]:
         checks = ("let max=", "let min=", "let abs=", "let sqrt=", "let pow=")
         if any(c in var for c in checks):
-            logger.error(f"Variable {var[4:].split('=')[0]} overshadows default function name")
+            logger.error(f"Variable '{var[4:].split('=')[0]}' overshadows default function name")
             return False
     return True
+
+def compile_vars(expression: str) -> str:
+    """
+    Replaces variables with their values
+    :param expression: Expression needed to be compiled
+    :return: Var-compiled expression
+    """
+    splitted = expression.split(";")
+    var_map: list[list[str]] = []
+    for var in splitted[:-1]:
+        var_name, var_val = var[4:].split("=")
+        var_name = var_name.replace(" ", "")
+        var_map.append([var_name, var_val])
+    var_map = list( sorted(var_map, key=lambda item: len(item[0])))
+    for i in range(len(var_map)):
+        k, v = var_map[i]
+        expression = expression.replace(k, v)
+        for x in var_map[i+1:]:
+            x[1] = x[1].replace(k, v)
+    return expression.split(";")[-1]
+
 
 def compile_functions(expression: str) -> str:
     """
