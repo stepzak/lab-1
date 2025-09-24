@@ -6,7 +6,7 @@ import constants as cst
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
-    level = logging.INFO,
+    level = logging.DEBUG,
     handlers=[
         logging.FileHandler(cst.LOG_FILE, mode="a", encoding="utf-8"),
         logging.StreamHandler(stdout),
@@ -225,7 +225,7 @@ def tokenize(expression: str) -> list[str]:
                     return []
         if s not in "()":
             is_digit = False
-
+    logger.debug(f"{tokens=}")
     return tokens
 
 def calc(expression: str) -> float | str:
@@ -303,12 +303,10 @@ def compile_vars(expression: str) -> str:
         var_name, var_val = var[4:].split("=")
         var_name = var_name.replace(" ", "")
         var_map.append([var_name, var_val])
-    var_map = list( sorted(var_map, key=lambda item: len(item[0])))
+    var_map = list( sorted(var_map, key=lambda item: len(item[0]), reverse = True))
     for i in range(len(var_map)):
         k, v = var_map[i]
         expression = expression.replace(k, v)
-        for x in var_map[i+1:]:
-            x[1] = x[1].replace(k, v)
     return expression.split(";")[-1]
 
 
