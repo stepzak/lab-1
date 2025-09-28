@@ -1,18 +1,5 @@
 import decimal
-import logging
 import constants as cst
-from sys import stdout
-
-
-logger = logging.getLogger(__name__)
-logging.basicConfig(
-    level = logging.DEBUG,
-    handlers=[
-        logging.FileHandler(cst.LOG_FILE, mode="a", encoding="utf-8"),
-        logging.StreamHandler(stdout),
-    ],
-    format = cst.FORMAT
-)
 
 def check_parenthesis(expression: str) -> bool:
     """
