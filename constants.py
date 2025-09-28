@@ -1,7 +1,14 @@
+import decimal
+import string
 from typing import Callable
 
 FORMAT = "[%(levelname)s - %(funcName)4s() ] %(message)s"
-LOG_FILE = "../logs/logs.log"
+LOG_FILE = "logs/logs.log"
+
+PRECISION = 100
+ROUNDING_DIGITS = 5
+ROUNDING = decimal.ROUND_HALF_UP
+
 
 FUNCTIONS_SYMBOLS_ENUM: dict[str, str] = {
         "max": "@",
@@ -29,3 +36,13 @@ SYMBOLS_CALLABLE_ENUM: dict[str, Callable] = {
 }
 
 FUNCTIONS = FUNCTIONS_ARGS.keys()
+
+AVAILABLE_SYMBOLS = string.digits+"*/+-%"+''.join(SYMBOLS_FUNCTIONS_ENUM.keys())+"().,"
+
+ERROR_CODES = {
+    0: None,
+    1: ValueError,
+    2: TypeError,
+    3: SyntaxError,
+    4: ZeroDivisionError
+}
