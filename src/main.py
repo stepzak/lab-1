@@ -34,7 +34,6 @@ def log_exceptions(func):
             return func(*args, **kwargs)
         except Exception as e:
             logger.exception(f"Exception in {func.__name__}: {e}")
-            raise  # Re-raise the exception
     return wrapper
 
 
@@ -98,7 +97,6 @@ def rpn_and_calc(tokens: list[str]) -> decimal.Decimal:
                     stack_functions[-1][1].append(str(res))
                 else:
                     output.append(res)
-
 
             else:
                 last_func[1].append(t)
@@ -286,10 +284,9 @@ def calc(expression: str) -> decimal.Decimal | int:
         return result
 
 
-
 def main():
     """
-    Entry point for application. Checks if expression is OK and removes all the spaces, then calls tokenize() and calc() functions
+    Entry point for application. Gets expression for stdin and passes it to calc() function
     """
     while True:
 
