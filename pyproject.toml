@@ -1,0 +1,8 @@
+[project]
+name = "lab1_m2_m4"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "pytest>=8.4.2",
+]

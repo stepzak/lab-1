@@ -4,28 +4,17 @@ from decimal import getcontext
 from functools import wraps
 from sys import stdout
 from typing import Callable
-
-import constants as cst
-from src.checks import check_parenthesis, check_vars, check_for_forbidden_symbols, check_is_integer
-from src.compiles import compile_functions, compile_vars
+import constants as cst # type: ignore
+from checks import check_parenthesis, check_vars, check_for_forbidden_symbols, check_is_integer # type: ignore
+from compiles import compile_functions, compile_vars # type: ignore
 
 getcontext().prec = cst.PRECISION
 
+logger = logging.getLogger(__name__)
 
 def round_decimal(dec: decimal.Decimal, n_digits: int = cst.ROUNDING_DIGITS, rounding=cst.ROUNDING):
     quantizer = decimal.Decimal('1.' + '0' * n_digits)
     return dec.quantize(quantizer, rounding=rounding)
-
-
-logger = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.DEBUG,
-    handlers=[
-        logging.FileHandler(cst.LOG_FILE, mode="a", encoding="utf-8"),
-        logging.StreamHandler(stdout),
-    ],
-    format=cst.FORMAT
-)
 
 
 def log_exceptions(func):
@@ -130,6 +119,8 @@ def rpn_and_calc(tokens: list[str]) -> decimal.Decimal:
                 elif t == ")":
                     while stack_ops[-1] != "(":
                         op = stack_ops.pop()
+                        if len(output)==1:
+                            raise SyntaxError("Unfinished line")
                         a, b = output[-2], output[-1]
                         del output[-2:]
                         output.append(operators[op][1](a, b))
@@ -140,8 +131,10 @@ def rpn_and_calc(tokens: list[str]) -> decimal.Decimal:
                     raise SyntaxError(f"Unknown token: '{t}'")
 
     for op in stack_ops[::-1]:
-
-        a, b = output[-2], output[-1]
+        try:
+            a, b = output[-2], output[-1]
+        except IndexError:
+            raise SyntaxError("Unfinished line")
         if op == "//" or op == "%":
             if not (check_is_integer(a) and check_is_integer(b)):
                 raise TypeError(f"Cannot apply '{op}' to {a} and {b}")
@@ -241,8 +234,7 @@ def tokenize(expression: str) -> list[str]:
                 if max_func_args != -1 and max_func_args < args:
                     func_name = cst.SYMBOLS_FUNCTIONS_ENUM[cur_func[0][0][:-1]]
 
-                    raise TypeError(
-                        f"TypeError: {func_name} requires maximum of {max_func_args} arguments but at least {cur_func[1]} were given")
+                    raise TypeError(f"TypeError: {func_name} requires maximum of {max_func_args} arguments but at least {cur_func[1]} were given")
         if s not in "()":
             is_digit = False
     logger.debug(f"{tokens=}")
@@ -311,4 +303,13 @@ def main():
 
 
 if __name__ == "__main__":
+    logger = logging.getLogger(__name__)
+    logging.basicConfig(
+        level=logging.DEBUG,
+        handlers=[
+            logging.FileHandler(cst.LOG_FILE, mode="a", encoding="utf-8"),
+            logging.StreamHandler(stdout),
+        ],
+        format=cst.FORMAT
+    )
     main()

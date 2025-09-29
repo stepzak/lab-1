@@ -1,4 +1,4 @@
-from tests.test_ok import suppress_error
+from .test_ok import suppress_error
 
 
 def test_two_binary_operations():

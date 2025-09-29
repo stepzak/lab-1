@@ -1,5 +1,5 @@
-from constants import FUNCTIONS_SYMBOLS_ENUM
-from tests.test_ok import suppress_error
+from constants import FUNCTIONS_SYMBOLS_ENUM #type: ignore
+from .test_ok import suppress_error
 
 
 def test_invalid_parenthesis():
