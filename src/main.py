@@ -44,8 +44,6 @@ def rpn_and_calc(tokens: list[str]) -> decimal.Decimal:
     :param tokens: list of tokens
     :return: value of RPN-converted tokens
     """
-    if '' in tokens:
-        tokens = tokens[0:]
     operators: dict[str, tuple[int, Callable[[decimal.Decimal, decimal.Decimal], decimal.Decimal]] ]= {
         "+": (0, lambda x, y: x+y),
         "-": (0, lambda x, y: x-y),
@@ -78,7 +76,6 @@ def rpn_and_calc(tokens: list[str]) -> decimal.Decimal:
             elif t == ',':
                 last_func[2].append(rpn_and_calc(last_func[1]))
                 last_func[1].clear()
-
 
             elif t == "]":
                 last_func[2].append(rpn_and_calc(last_func[1]))
@@ -165,7 +162,6 @@ def tokenize(expression: str) -> list[str]:
 
     current_functions: list[tuple[ list[str], list[int], list[int] ]] = [] #list of parsing functions. ({func_symbol}, {arg_count}, {parenthesis_count})
     for s in expression:
-
         if s not in cst.AVAILABLE_SYMBOLS:
             raise SyntaxError(f"Unknown token found: '{s}'")
 
@@ -184,13 +180,16 @@ def tokenize(expression: str) -> list[str]:
         elif s == "-":
             if not is_digit: #context management: if previous one was not a digit, it is a unary "-"
                 tokens.extend(("-1", "*"))
+                logger.warning("Two unary operations(-) one after other detected")
             else:
                 tokens.append("-") #else it is a substraction
         elif s == "+" and not is_digit:
+            logger.warning("Two unary operations(+) one after other detected")
             continue
 
         elif (s=="*" or s == "/") and tokens[-1] == s:
             tokens[-1]+=s
+
             continue
 
         elif s in cst.FUNCTIONS:
@@ -200,7 +199,7 @@ def tokenize(expression: str) -> list[str]:
 
 
         elif not is_digit and s not in "()" and tokens[-1] not in "(),[]" and s not in cst.FUNCTIONS:
-            raise TypeError("2 binary operations one after other")
+            raise TypeError("2 operations one after other")
 
         elif tokens[-1] in cst.FUNCTIONS and s!="(":
             raise SyntaxError("'(' must follow after a function")
