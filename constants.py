@@ -37,4 +37,4 @@ SYMBOLS_CALLABLE_ENUM: dict[str, Callable] = {
 
 FUNCTIONS = FUNCTIONS_ARGS.keys()
 
-AVAILABLE_SYMBOLS = string.digits+"*/+-%"+''.join(SYMBOLS_FUNCTIONS_ENUM.keys())+"().,"
+AVAILABLE_SYMBOLS = string.digits+"*/+-%"+''.join(SYMBOLS_FUNCTIONS_ENUM.keys())+"().,e"

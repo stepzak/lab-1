@@ -8,8 +8,8 @@ def suppress_error(expr: str, error):
         calc(expr)
 
 def test_basic():
-    expression = "+(1*3+2**4-4)/3%5"
-    assert  calc(expression) == (1*3+2**4-4)/3%5
+    expression = "+(1*3+2**4-4)/3%5+2e10"
+    assert  calc(expression) == (1*3+2**4-4)/3%5+2e10
 
 
 def test_max():

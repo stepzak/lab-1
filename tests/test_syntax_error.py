@@ -35,3 +35,7 @@ def test_forbiddens():
 def test_unknown_symbol():
     expression = "5,4"
     suppress_error(expression, SyntaxError)
+
+def test_unfinished():
+    expression = "5**"
+    suppress_error(expression, SyntaxError)

@@ -166,13 +166,12 @@ def tokenize(expression: str) -> list[str]:
     tokens: list[str] = [""]
     is_digit: bool = False  #is the last symbol digit(flag)
 
-    current_functions: list[tuple[list[str], list[int], list[
-        int]]] = []  #list of parsing functions. ({func_symbol}, {arg_count}, {parenthesis_count})
+    current_functions: list[tuple[list[str], list[int], list[int]]] = []  #list of parsing functions. ({func_symbol}, {arg_count}, {parenthesis_count})
     for s in expression:
         if s not in cst.AVAILABLE_SYMBOLS:
             raise SyntaxError(f"Unknown token found: '{s}'")
 
-        if s.isdigit() or s == ".":  #if current symbol is digit
+        if s.isdigit() or s in [".", "e"]:  #if current symbol is digit
             for func in current_functions:
                 if func[1][0] == 0:
                     func[1][0] += 1
@@ -183,7 +182,6 @@ def tokenize(expression: str) -> list[str]:
                 tokens[-1] += s  #if the previous one was a digit, we concatenate current token with symbol
 
             continue  #continues the loop(to eliminate extra checks)
-
         elif s == "-":
             if not is_digit:  #context management: if previous one was not a digit, it is a unary "-"
                 tokens.extend(("-1", "*"))
@@ -248,6 +246,8 @@ def tokenize(expression: str) -> list[str]:
         if s not in "()":
             is_digit = False
     logger.debug(f"{tokens=}")
+    if tokens[-1] in "+-**//%":
+        raise SyntaxError("Unfinished line")
     return tokens
 
 
