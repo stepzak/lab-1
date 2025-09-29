@@ -147,8 +147,10 @@ def rpn_and_calc(tokens: list[str]) -> decimal.Decimal:
         elif op == "/" and b == 0:
             raise ZeroDivisionError
         del output[-2:]
-
-        output.append(operators[op][1](a, b))
+        try:
+            output.append(operators[op][1](a, b))
+        except decimal.InvalidOperation:
+            raise TypeError(f"Cannot apply '{op}' to {a} and {b}")
 
     return output[0]
 
