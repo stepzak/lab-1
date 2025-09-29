@@ -1,9 +1,12 @@
 import decimal
+from os import path
 import string
 from typing import Callable
 
 FORMAT = "[%(levelname)s - %(funcName)4s() ] %(message)s"
-LOG_FILE = "logs/logs.log"
+LOG_FILE =  path.join(path.dirname(path.abspath(__file__)), "logs", "logs.log")
+
+
 
 PRECISION = 100
 ROUNDING_DIGITS = 5
