@@ -41,3 +41,7 @@ def test_vars_and_funcs():
     y = decimal.Decimal(5)
     expression = f"let x = {x}; let y = {y}; abs(-max({x}+{y}, min(sqrt({x}/{y}), 3)))+pow({x}, {y}, {y})"
     assert calc(expression) == abs(-max(x+y, min((x/y)**1/2, 3)))+pow(x, y, y)
+
+def test_right_assoc():
+    expression = "2**3**2"
+    assert calc(expression) == 2**3**2

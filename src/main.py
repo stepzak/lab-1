@@ -9,31 +9,36 @@ import constants as cst
 from src.checks import check_parenthesis, check_vars, check_for_forbidden_symbols, check_is_integer
 from src.compiles import compile_functions, compile_vars
 
-
 getcontext().prec = cst.PRECISION
 
-def round_decimal(dec: decimal.Decimal, n_digits: int = cst.ROUNDING_DIGITS, rounding = cst.ROUNDING):
+
+def round_decimal(dec: decimal.Decimal, n_digits: int = cst.ROUNDING_DIGITS, rounding=cst.ROUNDING):
     quantizer = decimal.Decimal('1.' + '0' * n_digits)
     return dec.quantize(quantizer, rounding=rounding)
 
+
 logger = logging.getLogger(__name__)
 logging.basicConfig(
-    level = logging.DEBUG,
+    level=logging.DEBUG,
     handlers=[
         logging.FileHandler(cst.LOG_FILE, mode="a", encoding="utf-8"),
         logging.StreamHandler(stdout),
     ],
-    format = cst.FORMAT
+    format=cst.FORMAT
 )
+
 
 def log_exceptions(func):
     """Decorator to automatically log exceptions"""
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
         except Exception as e:
             logger.exception(f"Exception in {func.__name__}: {e}")
+            raise
+
     return wrapper
 
 
@@ -44,21 +49,21 @@ def rpn_and_calc(tokens: list[str]) -> decimal.Decimal:
     :param tokens: list of tokens
     :return: value of RPN-converted tokens
     """
-    operators: dict[str, tuple[int, Callable[[decimal.Decimal, decimal.Decimal], decimal.Decimal]] ]= {
-        "+": (0, lambda x, y: x+y),
-        "-": (0, lambda x, y: x-y),
-        "*": (1, lambda x, y: x*y),
-        "/": (1, lambda x, y: x/y),
-        "//": (1, lambda x, y: x//y),
-        "%": (1, lambda x, y: x%y),
-        "**": (2, lambda x, y: x**y)
+    operators: dict[str, tuple[int, Callable[[decimal.Decimal, decimal.Decimal], decimal.Decimal]]] = {
+        "+": (0, lambda x, y: x + y),
+        "-": (0, lambda x, y: x - y),
+        "*": (1, lambda x, y: x * y),
+        "/": (1, lambda x, y: x / y),
+        "//": (1, lambda x, y: x // y),
+        "%": (1, lambda x, y: x % y),
+        "**": (2, lambda x, y: x ** y)
     }
 
     ops = operators.keys()
 
     output: list[decimal.Decimal] = []
     stack_ops: list[str] = []  # list of operations
-    stack_functions: list[tuple[str, list, list]] = [] #{function}, {tokens}, {args}
+    stack_functions: list[tuple[str, list, list]] = []  #{function}, {tokens}, {args}
     for t in tokens:
         if t == '':
             continue
@@ -79,13 +84,13 @@ def rpn_and_calc(tokens: list[str]) -> decimal.Decimal:
 
             elif t == "]":
                 last_func[2].append(rpn_and_calc(last_func[1]))
-                if last_func[0]==cst.FUNCTIONS_SYMBOLS_ENUM["pow"]:
+                if last_func[0] == cst.FUNCTIONS_SYMBOLS_ENUM["pow"]:
                     for i in range(len(last_func[2])):
                         if check_is_integer(last_func[2][i]):
                             last_func[2][i] = int(last_func[2][i])
-                        elif len(last_func[2])==3:
+                        elif len(last_func[2]) == 3:
                             raise TypeError("pow() 3rd argument not allowed unless all arguments are integers")
-                if cst.SYMBOLS_FUNCTIONS_ENUM[last_func[0]]!="sqrt":
+                if cst.SYMBOLS_FUNCTIONS_ENUM[last_func[0]] != "sqrt":
                     res = cst.SYMBOLS_CALLABLE_ENUM[last_func[0]](*last_func[2])
                 else:
                     res = last_func[2][0].sqrt()
@@ -106,10 +111,10 @@ def rpn_and_calc(tokens: list[str]) -> decimal.Decimal:
                 if t in ops:
                     priority = operators[t][0]
                     if len(stack_ops):
-                        if stack_ops[-1]== "(":
+                        if stack_ops[-1] == "(":
                             stack_ops.append(t)
                             continue
-                        while operators[stack_ops[-1]][0]>=priority:
+                        while operators[stack_ops[-1]][0] >= priority != 2:
                             op = stack_ops.pop()
                             a, b = output[-2], output[-1]
                             if op == "//" or op == "%":
@@ -123,7 +128,7 @@ def rpn_and_calc(tokens: list[str]) -> decimal.Decimal:
                 elif t == "(":
                     stack_ops.append(t)
                 elif t == ")":
-                    while stack_ops[-1]!= "(":
+                    while stack_ops[-1] != "(":
                         op = stack_ops.pop()
                         a, b = output[-2], output[-1]
                         del output[-2:]
@@ -135,6 +140,7 @@ def rpn_and_calc(tokens: list[str]) -> decimal.Decimal:
                     raise SyntaxError(f"Unknown token: '{t}'")
 
     for op in stack_ops[::-1]:
+
         a, b = output[-2], output[-1]
         if op == "//" or op == "%":
             if not (check_is_integer(a) and check_is_integer(b)):
@@ -149,6 +155,7 @@ def rpn_and_calc(tokens: list[str]) -> decimal.Decimal:
 
     return output[0]
 
+
 @log_exceptions
 def tokenize(expression: str) -> list[str]:
     """
@@ -157,43 +164,42 @@ def tokenize(expression: str) -> list[str]:
     :return: list of tokens
     """
     tokens: list[str] = [""]
-    is_digit: bool = False #is the last symbol digit(flag)
+    is_digit: bool = False  #is the last symbol digit(flag)
 
-
-    current_functions: list[tuple[ list[str], list[int], list[int] ]] = [] #list of parsing functions. ({func_symbol}, {arg_count}, {parenthesis_count})
+    current_functions: list[tuple[list[str], list[int], list[
+        int]]] = []  #list of parsing functions. ({func_symbol}, {arg_count}, {parenthesis_count})
     for s in expression:
         if s not in cst.AVAILABLE_SYMBOLS:
             raise SyntaxError(f"Unknown token found: '{s}'")
 
-        if s.isdigit() or s==".": #if current symbol is digit
+        if s.isdigit() or s == ".":  #if current symbol is digit
             for func in current_functions:
-                if func[1][0]==0:
-                    func[1][0]+=1
-            if not is_digit: #if previous one was not a digit we append the symbol as the first digit of a number
+                if func[1][0] == 0:
+                    func[1][0] += 1
+            if not is_digit:  #if previous one was not a digit we append the symbol as the first digit of a number
                 tokens.append(s)
-                is_digit=True #flag
+                is_digit = True  #flag
             else:
-                tokens[-1]+=s #if the previous one was a digit, we concatenate current token with symbol
+                tokens[-1] += s  #if the previous one was a digit, we concatenate current token with symbol
 
-            continue #continues the loop(to eliminate extra checks)
+            continue  #continues the loop(to eliminate extra checks)
 
         elif s == "-":
-            if not is_digit: #context management: if previous one was not a digit, it is a unary "-"
+            if not is_digit:  #context management: if previous one was not a digit, it is a unary "-"
                 tokens.extend(("-1", "*"))
                 logger.warning("Two unary operations(-) one after other detected")
             else:
-                tokens.append("-") #else it is a substraction
+                tokens.append("-")  #else it is a substraction
         elif s == "+" and not is_digit:
             logger.warning("Two unary operations(+) one after other detected")
             continue
 
-        elif (s=="*" or s == "/") and tokens[-1] == s:
-            tokens[-1]+=s
-
+        elif (s == "*" or s == "/") and tokens[-1] == s:
+            tokens[-1] += s
             continue
 
         elif s in cst.FUNCTIONS:
-            current_functions.append(([s], [0], [0] ))
+            current_functions.append(([s], [0], [0]))
             tokens.append(s)
             continue
 
@@ -201,49 +207,52 @@ def tokenize(expression: str) -> list[str]:
         elif not is_digit and s not in "()" and tokens[-1] not in "(),[]" and s not in cst.FUNCTIONS:
             raise TypeError("2 operations one after other")
 
-        elif tokens[-1] in cst.FUNCTIONS and s!="(":
+        elif tokens[-1] in cst.FUNCTIONS and s != "(":
             raise SyntaxError("'(' must follow after a function")
 
         else:
-            tokens.append(s) #appending the other tokens
-        if len(current_functions)>0:
+            tokens.append(s)  #appending the other tokens
+        if len(current_functions) > 0:
             cur_func = current_functions[-1]
             if s == "(":
                 if "[" not in cur_func[0][0]:
-                    cur_func[0][0]+="["
+                    cur_func[0][0] += "["
 
                     tokens[-1] = "["
                 else:
-                    current_functions[-1][2][0]+=1
+                    current_functions[-1][2][0] += 1
                 continue
-            elif s==")":
-                cur_func[2][0]-=1
-                if cur_func[2][0]<0:
+            elif s == ")":
+                cur_func[2][0] -= 1
+                if cur_func[2][0] < 0:
                     min_func_args = cst.FUNCTIONS_ARGS[cur_func[0][0][:-1]][0]
                     if min_func_args != -1 and min_func_args > cur_func[1][0]:
                         func_name = cst.SYMBOLS_FUNCTIONS_ENUM[cur_func[0][0][:-1]]
-                        raise TypeError(f"TypeError: {func_name} requires minimum  of {min_func_args} arguments but {cur_func[1]} were given")
+                        raise TypeError(
+                            f"TypeError: {func_name} requires minimum  of {min_func_args} arguments but {cur_func[1]} were given")
 
-                    tokens[-1]="]"
+                    tokens[-1] = "]"
 
                     current_functions.pop()
                     continue
 
             elif s == ",":
-                cur_func[1][0]+=1
+                cur_func[1][0] += 1
                 args: int = cur_func[1][0]
                 max_func_args = cst.FUNCTIONS_ARGS[cur_func[0][0][:-1]][1]
-                if max_func_args!=-1 and max_func_args<args:
+                if max_func_args != -1 and max_func_args < args:
                     func_name = cst.SYMBOLS_FUNCTIONS_ENUM[cur_func[0][0][:-1]]
 
-                    raise TypeError(f"TypeError: {func_name} requires maximum of {max_func_args} arguments but at least {cur_func[1]} were given")
+                    raise TypeError(
+                        f"TypeError: {func_name} requires maximum of {max_func_args} arguments but at least {cur_func[1]} were given")
         if s not in "()":
             is_digit = False
     logger.debug(f"{tokens=}")
     return tokens
 
+
 @log_exceptions
-def calc(expression: str) -> decimal.Decimal | int:
+def calc(expression: str) -> decimal.Decimal | int | None:
     """
     Calculates value of the expression
     :param expression: Expression to calculate
@@ -265,15 +274,18 @@ def calc(expression: str) -> decimal.Decimal | int:
 
     expression = expression.replace(" ", "")
 
-    if not (expression[0].isdigit() or expression[0] in '-+('+''.join(cst.FUNCTIONS)):  # check if beginning is OK
+    if not (expression[0].isdigit() or expression[0] in '-+(' + ''.join(cst.FUNCTIONS)):  # check if beginning is OK
         raise SyntaxError("Must begin with unary operation or number")
 
     if not check_parenthesis(expression):
         raise SyntaxError("Invalid parenthesis syntax")
 
     tokens = tokenize(expression)
-
+    if not tokens:
+        return None
     result = rpn_and_calc(tokens)
+    if not result and result != 0:
+        return None
     if type(result) is int:
         return result
     result = round_decimal(result)
@@ -289,10 +301,11 @@ def main():
     """
     while True:
 
-
         expression: str = input("Enter the expression to calculate: ")
-
-        result = calc(expression)
+        try:
+            result = calc(expression)
+        except (SyntaxError, ValueError, ZeroDivisionError, TypeError):
+            result = None
 
         logger.info(f"{expression}={result}")
 
