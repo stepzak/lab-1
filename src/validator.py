@@ -21,9 +21,6 @@ class PreCompiledValidExpression(CallAllMethods):
         :raises InvalidParenthesisError otherwise
         """
 
-        if "()" in self.expression:
-            raise InvalidParenthesisError("Found empty parenthesis in expression", exc_type="empty")
-
         parentheses_total: int = 0
 
         for s in self.expression:
@@ -36,14 +33,16 @@ class PreCompiledValidExpression(CallAllMethods):
         if parentheses_total > 0:
             raise InvalidParenthesisError("Unbalanced parenthesis in expression", exc_type="unbalanced")
 
-    def _check_vars(self) -> str:
+    def _check_vars_and_funcs(self) -> str:
         """
         Checks if vars do not overshadow default function names(DFN)
         :return: None
         :raises InvalidVariableNameError: if vars do overshadow default function names(DFN)
         """
         expr_to_check = self.expression.replace(" =", "=")
-        checks = ("let max=", "let min=", "let abs=", "let sqrt=", "let pow=", "let let=")
+        checks = ["let let=", "def let("]
+        checks += list([f"let {dfn}=" for dfn in vars.FUNCTIONS])
+        checks += list([f"def {dfn}(" for dfn in vars.FUNCTIONS])
         for check in checks:
 
             if check in expr_to_check:
@@ -54,7 +53,7 @@ class PreCompiledValidExpression(CallAllMethods):
 class CompiledValidExpression(CallAllMethods):
     def __init__(self, expression: CompiledExpression):
         self.expression = expression.expression
-        self.AVAILABLE_SYMBOLS = ''.join(expression.var_map.keys())+''.join(vars.FUNCTIONS)+''.join(vars.OPERATORS.keys())+"(),[]"+string.digits+"let;"
+        self.AVAILABLE_SYMBOLS = ''.join(expression.var_map.keys())+''.join(vars.FUNCTIONS)+''.join(vars.OPERATORS.keys())+"(),[]"+string.digits+"let;defreturn"
         self.var_map = expression.var_map
         self.call_all_methods()
         self.expression = self.expression.replace(" ", "")

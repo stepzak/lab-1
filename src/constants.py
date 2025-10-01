@@ -10,6 +10,6 @@ LOG_FILE =  path.join(
     "logs.log"
 )
 
-PRECISION = 100
+PRECISION = 125
 ROUNDING_DIGITS = 2
 ROUNDING = decimal.ROUND_HALF_UP

@@ -14,8 +14,24 @@ getcontext().prec = cst.PRECISION
 
 logger = logging.getLogger(__name__)
 
+
+class CustomFunctionExecutor:
+    def __init__(self, indexed_vars: list[tuple[str, str | None]],  expression: str):
+        self.expression = expression
+        self.indexed_vars = indexed_vars
+
+    @log_exceptions(logger = logger)
+    def execute_function(self, *args, var_map: dict) -> decimal.Decimal:
+        var_map = var_map.copy()
+        for i in range(len(self.indexed_vars)):
+            try:
+                var_map.update({self.indexed_vars[i][0]: str(args[i])})
+            except IndexError:
+                var_map.update({self.indexed_vars[i][0]: self.indexed_vars[i][1]})
+        return calc(self.expression, var_map)
+
 @log_exceptions(logger = logger)
-def rpn_and_calc(tokens: list[str], var_map: dict[str, float]) -> decimal.Decimal:
+def rpn_and_calc(tokens: list[str], var_map: dict[str, str]) -> decimal.Decimal | None:
     """
     Converts list of tokens to RPN and then calcs to value
     :param tokens: list of tokens
@@ -73,11 +89,17 @@ def rpn_and_calc(tokens: list[str], var_map: dict[str, float]) -> decimal.Decima
                     for val in validators:
                         val(*args, op=last_func[0])
                 if len(args) == 1:
-                    logger.debug(f"Calling function {func.__name__}({args[0]})")
-                    res = func(decimal.Decimal(args[0]))
+                    logger.debug(f"Calling function {last_func[0]}({args[0]})")
+                    try:
+                        res = func(args[0], var_map = var_map)
+                    except TypeError:
+                        res = func(args[0])
                 else:
-                    logger.debug(f"Calling function {func.__name__}({args})")
-                    res = func(*args)
+                    logger.debug(f"Calling function {last_func[0]}({args})")
+                    try:
+                        res = func(*args, var_map = var_map)
+                    except TypeError:
+                        res = func(*args)
                 stack_functions.pop()
                 if len(stack_functions):
                     stack_functions[-1][1].append(str(res))
@@ -125,8 +147,9 @@ def rpn_and_calc(tokens: list[str], var_map: dict[str, float]) -> decimal.Decima
     for op in stack_ops[::-1]:
         call_operator(op)
 
-
-    return output[0]
+    if len(output):
+        return output[0]
+    return None
 
 
 @log_exceptions(logger=logger)
@@ -160,7 +183,7 @@ def tokenize(compiled_expression: CompiledValidExpression, var_map: dict[str, st
 
             elif tokens[-1] not in known_tokens and not is_digit:
                 raise InvalidTokenError(f"Unknown token: '{tokens[-1]}'", exc_type="unknown_token")
-            if s in digitable:
+            if tokens[-1] in digitable:
                 for func in current_functions:
                     if func[1][0] == 0:
                         func[1][0] += 1
@@ -179,6 +202,7 @@ def tokenize(compiled_expression: CompiledValidExpression, var_map: dict[str, st
                 else:
                     tokens.append("-")  #else it is a substraction
             elif s == "+" and not is_digit:
+                tokens.append("+")
                 logger.warning("Two unary operations(+) one after other detected")
                 continue
 
@@ -204,7 +228,7 @@ def tokenize(compiled_expression: CompiledValidExpression, var_map: dict[str, st
                         min_func_args = FUNCTIONS_ARGS[cur_func[0][0][:-1]][0]
                         if min_func_args != -1 and min_func_args > cur_func[1][0]:
                             func_name = cur_func[0][0][:-1]
-                            raise TypeError(f"TypeError: {func_name} requires minimum  of {min_func_args} arguments but {cur_func[1]} were given")
+                            raise TypeError(f"TypeError: {func_name} requires minimum  of {min_func_args} arguments but {cur_func[1][0]} were given")
 
                         tokens[-1] = "]"
 
@@ -235,16 +259,34 @@ def calc(expr: str, var_map = None) -> decimal.Decimal | int | None:
     :param var_map: map of variables {"var_name": "var_expression"}
     :return: (error code, value of the expression). Value can be returned as None if an error occurred during calculation process
     """
+    global FUNCTIONS_CALLABLE_ENUM, FUNCTIONS, FUNCTIONS_ARGS
     pre_compiled = PreCompiledValidExpression(expr)
     expression = CompiledExpression(pre_compiled.expression, var_map)
     if not var_map:
         var_map = expression.var_map
+        RESET_CALLABLE_ENUM = FUNCTIONS_CALLABLE_ENUM.copy()
+        RESET_FUNCTIONS_ENUM = FUNCTIONS.copy()
+        RESET_FUNCTIONS_ARGS = FUNCTIONS_ARGS.copy()
+
+    func_map = expression.func_map
+    for k, v in func_map.items():
+        obj = CustomFunctionExecutor(v[0], v[1])
+        FUNCTIONS_CALLABLE_ENUM[k] = (obj.execute_function, None)
+        FUNCTIONS_ARGS[k] = (v[2], v[3])
+    FUNCTIONS = list(FUNCTIONS_CALLABLE_ENUM.keys())
     compiled_expression = CompiledValidExpression(expression)
+
+
     logger.debug(f"{compiled_expression.expression=}")
     tokens = tokenize(compiled_expression, var_map)
     if not tokens:
         return None
     result = rpn_and_calc(tokens, var_map)
+    if not var_map:
+        FUNCTIONS = RESET_FUNCTIONS_ENUM.copy()
+        FUNCTIONS_CALLABLE_ENUM = RESET_CALLABLE_ENUM.copy()
+        FUNCTIONS_ARGS = RESET_FUNCTIONS_ARGS.copy()
+
     if not result:
         return result
     if type(result) is int:
@@ -262,7 +304,9 @@ def main():
     """
     while True:
 
-        expression: str = input("Enter the expression to calculate: ")
+        expression: str = input("Enter the expression to calculate(q to exit): ")
+        if expression == "q":
+            exit(0)
         try:
             result = calc(expression)
         except Exception:
