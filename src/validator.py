@@ -1,0 +1,88 @@
+import string
+
+import vars
+from compiler import CompiledExpression
+from extra.exceptions import InvalidParenthesisError, VariableOvershadowError, InvalidTokenError
+
+from extra.utils import CallAllMethods
+from vars import FUNCTIONS_CALLABLE_ENUM, OPERATORS
+
+
+class PreCompiledValidExpression(CallAllMethods):
+    def __init__(self, expression: str):
+        self.expression = expression
+
+        self.call_all_methods()
+
+    def _check_parenthesis(self) -> None:
+        """
+        Checks if parenthesis syntax is OK
+        :return: None if OK
+        :raises InvalidParenthesisError otherwise
+        """
+
+        if "()" in self.expression:
+            raise InvalidParenthesisError("Found empty parenthesis in expression", exc_type="empty")
+
+        parentheses_total: int = 0
+
+        for s in self.expression:
+            if s == "(":
+                parentheses_total += 1
+            elif s == ")":
+                parentheses_total -= 1
+            if parentheses_total < 0:
+                raise InvalidParenthesisError("Unbalanced parenthesis in expression", exc_type="unbalanced")
+        if parentheses_total > 0:
+            raise InvalidParenthesisError("Unbalanced parenthesis in expression", exc_type="unbalanced")
+
+    def _check_vars(self) -> str:
+        """
+        Checks if vars do not overshadow default function names(DFN)
+        :return: None
+        :raises InvalidVariableNameError: if vars do overshadow default function names(DFN)
+        """
+        expr_to_check = self.expression.replace(" =", "=")
+        checks = ("let max=", "let min=", "let abs=", "let sqrt=", "let pow=", "let let=")
+        for check in checks:
+
+            if check in expr_to_check:
+                raise VariableOvershadowError(f"variable '{check[4:-1]}' overshadows default function name")
+        return ''
+
+
+class CompiledValidExpression(CallAllMethods):
+    def __init__(self, expression: CompiledExpression):
+        self.expression = expression.expression
+        self.AVAILABLE_SYMBOLS = ''.join(expression.var_map.keys())+''.join(vars.FUNCTIONS)+''.join(vars.OPERATORS.keys())+"(),[]"+string.digits+"let;"
+        self.var_map = expression.var_map
+        self.call_all_methods()
+        self.expression = self.expression.replace(" ", "")
+
+
+    def _check_beginning(self):
+        oper = ""
+        cur_token = ""
+        for i in range(len(self.expression)):
+            s = self.expression[i]
+
+
+            if len(oper):
+                if oper+s in OPERATORS.keys():
+                    oper+=s
+                    continue
+                raise InvalidTokenError(f"Unfinished line: operation '{oper}' has no first operand",
+                                        exc_type="invalid_token")
+            if cur_token in FUNCTIONS_CALLABLE_ENUM.keys() or s.isdigit() or cur_token in self.var_map.keys():
+                return
+
+            elif s in OPERATORS.keys() and s not in ("+", "-"):
+                oper = s
+                continue
+            else:
+                cur_token+=s
+
+
+
+if __name__ == "__main__":
+    print(PreCompiledValidExpression("5+(1)"))

@@ -1,0 +1,60 @@
+import decimal
+from typing import Callable, Dict, Union
+
+from extra.utils import check_is_integer
+
+def pow_validator(*args, **kwargs):
+    if len(args) == 3:
+        if not all([check_is_integer(x) for x in args]):
+            try:
+                integer_validator(args, op = "pow")
+            except TypeError:
+                raise TypeError("pow() 3rd argument not allowed unless all arguments are integers")
+
+def integer_validator(*args, **kwargs):
+    if not all([check_is_integer(x) for x in args]):
+        args = [str(arg) for arg in args]
+        raise TypeError(f"Cannot apply '{kwargs['op']}' to {', '.join(args)}: only integers are allowed")
+
+def non_negative_validator(*args, **kwargs):
+    if not all(x>=0 for x in args):
+        args = [str(arg) for arg in args]
+        raise TypeError(f"Cannot apply '{kwargs['op']}' to {','.join(args)}: only non-negative values are allowed")
+
+OPERATORS: Dict[str, tuple[int, Callable[[decimal.Decimal, decimal.Decimal], Union[decimal.Decimal, int]], bool, list[Callable] | None]] = {
+        "+": (0, lambda x, y: x + y,  False, None),
+        "-": (0, lambda x, y: x - y, False, None),
+        "*": (1, lambda x, y: x * y, False, None),
+        "/": (1, lambda x, y: x / y, False, None),
+        "//": (1, lambda x, y: x // y, False, [integer_validator]),
+        "%": (1, lambda x, y: x % y, False, [integer_validator]),
+        "**": (2, lambda x, y: x ** y, True, None),
+        "==": (-3, lambda x, y: int(x == y), False, None),
+        "!=": (-3, lambda x, y: int(x != y), False, None),
+        "<": (-3, lambda x, y: int(x < y), False, None),
+        "<=": (-3, lambda x, y: int(x <= y), False, None),
+        ">": (-3, lambda x, y: int(x > y), False, None),
+        ">=": (-3, lambda x, y: int(x >= y), False, None),
+        "&": (-1, lambda x, y: int(x) & int(y), False, [integer_validator]),
+        "^": (-2, lambda x, y: int(x) ^ int(y), False, [integer_validator]),
+        "|": (-2, lambda x, y: int(x) | int(y), False, [integer_validator]),
+    } #operator: (priority, function, is_right_assoc, validator
+
+
+FUNCTIONS_CALLABLE_ENUM: dict[str, tuple[Callable, list[Callable] | None]] = {
+        "max": (max, None),
+        "min": (min, None),
+        "abs": (abs, None),
+        "pow": (pow, [pow_validator]),
+        "sqrt": (lambda a: a.sqrt(), [non_negative_validator]) #function_name: (function, validators)
+    }
+
+FUNCTIONS_ARGS: dict[str, tuple[int, int]] = {  #func_symbol: (min_args, max_args)
+        "max": (1, -1),
+        "min": (1, -1),
+        "abs": (1, 1),
+        "pow": (2, 3),
+        "sqrt": (1, 1)
+    }
+
+FUNCTIONS = list(FUNCTIONS_ARGS.keys())
