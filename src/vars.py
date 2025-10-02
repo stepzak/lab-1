@@ -21,7 +21,7 @@ def non_negative_validator(*args, **kwargs):
         args = [str(arg) for arg in args]
         raise TypeError(f"Cannot apply '{kwargs['op']}' to {','.join(args)}: only non-negative values are allowed")
 
-OPERATORS: Dict[str, tuple[int, Callable[[decimal.Decimal, decimal.Decimal], Union[decimal.Decimal, int]], bool, list[Callable] | None]] = {
+OPERATORS: Dict[str, tuple[float, Callable[[decimal.Decimal, decimal.Decimal], Union[decimal.Decimal, int]], bool, list[Callable] | None]] = {
         "+": (0, lambda x, y: x + y,  False, None),
         "-": (0, lambda x, y: x - y, False, None),
         "*": (1, lambda x, y: x * y, False, None),

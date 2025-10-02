@@ -1,17 +1,17 @@
 import decimal
 import logging
-import math
 from functools import wraps
 import src.constants as cst
-
-print(math.sqrt(decimal.Decimal(5))**2)
 
 def check_is_integer(dec: decimal.Decimal) -> bool:
     return dec.as_integer_ratio()[1] == 1.0
 
 def round_decimal(dec: decimal.Decimal, n_digits: int = cst.ROUNDING_DIGITS, rounding=cst.ROUNDING):
     quantizer = decimal.Decimal('1.' + '0' * n_digits)
-    return dec.quantize(quantizer, rounding=rounding)
+    try:
+        return dec.quantize(quantizer, rounding=rounding)
+    except decimal.InvalidOperation:
+        return dec
 
 def log_exceptions(logger: logging.Logger):
     def decorator(func):

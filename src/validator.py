@@ -2,10 +2,9 @@ import string
 
 import vars
 from compiler import CompiledExpression
-from extra.exceptions import InvalidParenthesisError, VariableOvershadowError, InvalidTokenError
+from extra.exceptions import InvalidParenthesisError, VariableOvershadowError
 
 from extra.utils import CallAllMethods
-from vars import FUNCTIONS_CALLABLE_ENUM, OPERATORS
 
 
 class PreCompiledValidExpression(CallAllMethods):
@@ -56,7 +55,6 @@ class CompiledValidExpression(CallAllMethods):
         self.AVAILABLE_SYMBOLS = ''.join(expression.var_map.keys())+''.join(vars.FUNCTIONS)+''.join(vars.OPERATORS.keys())+"(),[]"+string.digits+"let;defreturn"
         self.var_map = expression.var_map
         self.call_all_methods()
-        self.expression = self.expression.replace(" ", "")
 
 
     def _check_beginning(self):
@@ -67,15 +65,17 @@ class CompiledValidExpression(CallAllMethods):
 
 
             if len(oper):
-                if oper+s in OPERATORS.keys():
+                if oper+s in vars.OPERATORS.keys():
                     oper+=s
                     continue
-                raise InvalidTokenError(f"Unfinished line: operation '{oper}' has no first operand",
-                                        exc_type="invalid_token")
-            if cur_token in FUNCTIONS_CALLABLE_ENUM.keys() or s.isdigit() or cur_token in self.var_map.keys():
+                elif s.isdigit() or s in self.var_map.keys():
+                    return
+                #raise InvalidTokenError(f"Unfinished line: operation '{oper}' has no first operand",
+                 #                       exc_type="invalid_token")
+            if cur_token in vars.FUNCTIONS_CALLABLE_ENUM.keys() or s.isdigit() or cur_token in self.var_map.keys():
                 return
 
-            elif s in OPERATORS.keys() and s not in ("+", "-"):
+            elif s in vars.OPERATORS.keys() and s not in ("+", "-"):
                 oper = s
                 continue
             else:
