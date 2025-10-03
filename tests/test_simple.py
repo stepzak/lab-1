@@ -1,0 +1,57 @@
+import pytest
+
+from extra.exceptions import InvalidTokenError, InvalidParenthesisError
+from main import calc
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "1+4",
+        "10-100",
+        "5*7*8",
+        "5*(7-3)",
+        "2**3**2",
+        "2*7%4",
+        "8 & 3",
+        "8 ^ 3",
+        "8 ^ 3 == 0",
+        "9+7>18",
+        "9*18<=5",
+        "(2**3)**2!=512",
+        "53 // 16",
+        "(53+14)//16+5%3+(34+18>=60)*52-2**3**4+(5!=4)*4-(3>=2-1)+(4==5-1)"
+    ]
+)
+def test_simple_ok(expression):
+    assert calc(expression) == eval(expression)
+
+
+@pytest.mark.parametrize("expression, exception",
+    [
+        ("5/0", ZeroDivisionError),
+        ("5.3//2", TypeError),
+        ("5%2.3", TypeError),
+        ("2.3 & 3", TypeError),
+        ("2 ^ 3.2 == 0", TypeError),
+        ("2.3 | 3.2 == 0", TypeError),
+    ]
+)
+def test_simple_invalid_operands(expression, exception):
+    with pytest.raises(exception):
+        calc(expression)
+
+@pytest.mark.parametrize("expression, exception",
+    [
+        ("*-5+3", SyntaxError),
+        ("2+5*", SyntaxError),
+        ("2 5+6", SyntaxError),
+        ("x+5", InvalidTokenError),
+        ("5+((3-4)", InvalidParenthesisError),
+        ("(5+()6)", InvalidParenthesisError),
+        (")5+5*3(", InvalidParenthesisError),
+    ]
+)
+def test_simple_invalid_expressions(expression, exception):
+    with pytest.raises(exception):
+        calc(expression)

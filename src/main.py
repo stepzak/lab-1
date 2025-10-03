@@ -7,7 +7,7 @@ from sys import stdout
 from typing import Any, Union
 
 import constants as cst # type: ignore
-from extra.exceptions import InvalidTokenError #type: ignore
+from extra.exceptions import InvalidTokenError, InvalidParenthesisError  # type: ignore
 from extra.utils import log_exceptions, round_decimal, check_is_integer #type: ignore
 from validator import PreCompiledValidExpression, CompiledValidExpression  #type: ignore
 from compiler import CompiledExpression #type: ignore
@@ -20,6 +20,13 @@ logger = logging.getLogger(__name__)
 
 sys.set_int_max_str_digits(cst.MAXIMUM_DIGITS)
 
+INITIAL_VALUES = {
+            "FUNCTIONS_CALLABLE_ENUM": vars.FUNCTIONS_CALLABLE_ENUM.copy(),
+            "FUNCTIONS": vars.FUNCTIONS.copy(),
+            "FUNCTIONS_ARGS": vars.FUNCTIONS_ARGS.copy(),
+            "OPERATORS": vars.OPERATORS.copy(),
+        }
+
 class CustomFunctionExecutor:
     def __init__(self, indexed_vars: list[tuple[str, Union[str, None]]],  expression: str):
         self.expression = expression
@@ -30,7 +37,10 @@ class CustomFunctionExecutor:
         var_map = var_map.copy()
         for i in range(len(self.indexed_vars)):
             try:
-                var_map.update({self.indexed_vars[i][0]: str(args[i])})
+                if args[i] is not None:
+                    var_map.update({self.indexed_vars[i][0]: str(args[i])})
+                else:
+                    raise IndexError
             except IndexError:
                 var_map.update({self.indexed_vars[i][0]: self.indexed_vars[i][1]})
         return calc(self.expression, var_map)
@@ -61,24 +71,26 @@ def rpn_and_calc(tokens: list[str], var_map: dict[str, str]) -> decimal.Decimal 
             for validator in op_to_run[3]:
                 validator(a, b, op=operator)
         try:
-            if operator == "**":
-                n_digits = float(b*decimal.Decimal(log10(a)))
-            elif operator == "*":
-                n_digits = log10(a)+log10(b)
-            elif operator in ["/", "//"]:
-                n_digits = log10(a) - log10(b)
+            if a != 0 and b!=0:
+                abs_a, abs_b = float(abs(a)), float(abs(b)) #type: ignore
+                if operator == "**":
+                    n_digits = float(b*decimal.Decimal(log10(abs_a)))
+                elif operator == "*":
+                    n_digits = log10(abs_b)+log10(abs_b)
+                elif operator in ["/", "//"]:
+                    n_digits = log10(abs_a) - log10(abs_b)
 
-            elif operator == "+":
-                n_digits = max(log10(a), log10(b))
-            else:
-                n_digits = -1
-            n_digits = floor(n_digits)+1
+                elif operator == "+":
+                    n_digits = max(log10(abs_a), log10(abs_b))
+                else:
+                    n_digits = -1
+                n_digits = floor(n_digits)+1
 
-            if n_digits > cst.MAXIMUM_DIGITS:
-                raise ValueError(f"Operation {a}**{b} will lead to at leat {n_digits} out of maximum of {cst.MAXIMUM_DIGITS}")
+                if n_digits > cst.MAXIMUM_DIGITS:
+                    raise ValueError(f"Operation {a}**{b} will lead to at leat {n_digits} out of maximum of {cst.MAXIMUM_DIGITS}")
 
-            if n_digits > cst.MAXIMUM_DIGITS_WARNING:
-                logger.warning(f"Operation {a} ** {b} will lead to at least {n_digits}(warning set on {cst.MAXIMUM_DIGITS_WARNING})")
+                if n_digits > cst.MAXIMUM_DIGITS_WARNING:
+                    logger.warning(f"Operation {a} ** {b} will lead to at least {n_digits}(warning set on {cst.MAXIMUM_DIGITS_WARNING})")
 
             to_app = op_to_run[1](a, b)
             if check_is_integer(to_app):
@@ -180,7 +192,7 @@ def rpn_and_calc(tokens: list[str], var_map: dict[str, str]) -> decimal.Decimal 
                             break
                     stack_ops.pop()
                 else:
-                    raise SyntaxError(f"Unknown token: '{t}'")
+                    raise InvalidTokenError(f"Unknown token: '{t}'", exc_type="unknown_token")
 
     for op in stack_ops[::-1]:
         call_operator(op)
@@ -209,8 +221,9 @@ def tokenize(compiled_expression: CompiledValidExpression, var_map: dict[str, st
         else:
             tokens.append(token)
 
-    digitable = vars.FUNCTIONS+list(var_map.keys())+list(string.digits)
-
+    digitable = vars.FUNCTIONS+list(string.digits)
+    if var_map:
+        digitable+=list(var_map.keys())
     def check_is_digit(x: str) -> bool:
         if x in digitable or x.isnumeric():
             return True
@@ -236,11 +249,12 @@ def tokenize(compiled_expression: CompiledValidExpression, var_map: dict[str, st
             return x.startswith(tokens[-1]) or x.startswith(s)
         multi_symbols = list(filter(filter_func, vars.OPERATORS.keys()))
         multi_symbols+=list(filter(filter_func, vars.FUNCTIONS_CALLABLE_ENUM.keys()))
-        multi_symbols+=list(filter(filter_func, var_map.keys()))
+        if var_map:
+            multi_symbols+=list(filter(filter_func, var_map.keys()))
         if any(tokens[-1]+s in ms for ms in multi_symbols) and len(multi_symbols):
             tokens[-1]+=s
 
-        elif any(s in ms for ms in multi_symbols) and len(multi_symbols):
+        elif any(s in ms and s not in ['-', "+"] for ms in multi_symbols) and len(multi_symbols):
             place_token(s)
         else:
             if tokens[-1] in vars.FUNCTIONS:
@@ -284,13 +298,21 @@ def tokenize(compiled_expression: CompiledValidExpression, var_map: dict[str, st
                     if check_is_digit(tokens[-i]):
                         break
                     elif tokens[-i] in vars.OPERATORS.keys():
-                        raise TypeError(f"Two operations one after other: {tokens[-i]}{s}")
+                        raise SyntaxError(f"Two operations one after other: {tokens[-i]}{s}")
             elif s == ")":
                 for i in range(1, len(tokens) - 1):
                     if check_is_digit(tokens[-i]):
                         break
                     elif tokens[-i] in vars.OPERATORS.keys():
-                        raise TypeError(f"Operation '{tokens[-i]}' has no second operand")
+                        raise SyntaxError(f"Operation '{tokens[-i]}' has no second operand")
+                    elif tokens[-i] == "(":
+                        if not len(current_functions):
+                            raise InvalidParenthesisError("Empty parenthesis", exc_type="empty")
+                        if current_functions[-1][2][0] != 0:
+                            raise InvalidParenthesisError("Empty parenthesis", exc_type="empty")
+                        else:
+                            break
+
                 tokens.append(")")
             else:
                 place_token(s)#appending the other tokens
@@ -350,17 +372,14 @@ def calc(expr: str, var_map = None, debug_info = False, reset_on_exit = False) -
     :return: (error code, value of the expression). Value can be returned as None if an error occurred during calculation process
 
     """
+    global INITIAL_VALUES
+
     pre_compiled = PreCompiledValidExpression(expr)
     expression = CompiledExpression(pre_compiled.expression, var_map)
-    if reset_on_exit:
-        var_map = expression.var_map
-        resets = {
-            "FUNCTIONS_CALLABLE_ENUM": vars.FUNCTIONS_CALLABLE_ENUM.copy(),
-            "FUNCTIONS": vars.FUNCTIONS.copy(),
-            "FUNCTIONS_ARGS": vars.FUNCTIONS_ARGS.copy(),
-            "OPERATORS": vars.OPERATORS.copy(),
-        }
 
+
+    if not var_map:
+        var_map = expression.var_map
     func_map = expression.func_map
     for k, v in func_map.items():
         obj = CustomFunctionExecutor(v[0], v[1])
@@ -387,7 +406,7 @@ def calc(expr: str, var_map = None, debug_info = False, reset_on_exit = False) -
         return result, vars.FUNCTIONS_CALLABLE_ENUM.copy(), vars.FUNCTIONS.copy(), vars.OPERATORS.copy()
 
     if reset_on_exit:
-        recover_state(resets)
+        recover_state(INITIAL_VALUES)
     if not result:
         return result
     if type(result) is int:

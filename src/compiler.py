@@ -1,5 +1,6 @@
 from typing import Any, Literal
 import vars
+from constants import NAME_FORBIDDEN_SYMBOLS, SYSTEM_NAMES
 from extra.exceptions import InvalidTokenError, VariableOvershadowError
 from extra.utils import CallAllMethods
 
@@ -23,15 +24,21 @@ def parse_function(func_expression: str) -> tuple[str, list[tuple[str, str | Non
             name+=s
 
         elif ")" not in name:
+            if s in vars.OPERATORS.keys():
+                raise InvalidTokenError(f"Symbol '{s}' is forbidden for name", exc_type="invalid_token")
             if s == ")":
                 name+=")"
+                if not cur_argument_name:
+                    continue
+                if cur_argument_default is None and got_default_values:
+                    raise ValueError(f"'{func_expression}': Non-default argument '{cur_argument_name}' after default ones")
                 args.append((cur_argument_name, cur_argument_default))
                 continue
             elif s == ",":
                 if cur_argument_default=='':
-                    raise SyntaxError(f"{name}: cannot default argument value of {cur_argument_name} empty")
-                elif cur_argument_name is None and got_default_values:
-                    raise ValueError(f"Non-default argument {cur_argument_name} after default ones")
+                    raise SyntaxError(f"{name}: cannot default argument value of '{cur_argument_name}' empty")
+                elif cur_argument_default is None and got_default_values:
+                    raise ValueError(f"'{func_expression}': Non-default argument '{cur_argument_name}' after default ones")
                 args.append((cur_argument_name, cur_argument_default))
                 cur_argument_name = ''
                 cur_argument_default = None
@@ -63,34 +70,39 @@ def parse_function(func_expression: str) -> tuple[str, list[tuple[str, str | Non
             else:
                 return_word += s
                 if return_word not in ":return":
-                    raise InvalidTokenError(f"Invalid token when defining return value of function {name}: {return_word}", exc_type="forbidden_symbol")
+                    raise InvalidTokenError(f"Invalid token when defining return value of function '{name}': '{return_word}'", exc_type="forbidden_symbol")
     return None
 
 
-def check_valid_name(name: str, typeof: Literal["operator", "function", "variable"], var_map: dict, func_map: dict, op_map: dict):
+def check_valid_name(name: str, typeof: Literal["operator", "function", "variable", "argument"], var_map: dict, func_map: dict, op_map: dict):
     checks_config = {
         "operator": [(var_map, "variable"), (func_map, "function")],
         "function" : [(var_map, "variable"), (op_map, "operator"),],
         "variable" : [(op_map, "operator"), (func_map, "function")],
+        "argument" : [(op_map, "operator"), (func_map, "function")],
     }
 
     cfg = checks_config[typeof]
     cfg.extend([(vars.FUNCTIONS_CALLABLE_ENUM, "function"), (vars.OPERATORS, "operator")])
+
     try:
-        float(name)
-        raise VariableOvershadowError(f"{typeof} {name} overshadows a number")
+        float(name[0])
+        raise VariableOvershadowError(f"{typeof} '{name}' overshadows a number")
     except ValueError:
         pass
 
-    if name.find(" ") != -1:
-        raise ValueError(f"{name}: {typeof} name cannot contain whitespaces")
+    intersection_set = set(name) & NAME_FORBIDDEN_SYMBOLS
+    if name in SYSTEM_NAMES:
+        raise SyntaxError(f"{typeof} '{name}' is forbidden: it is a system name")
+    if intersection_set:
+        raise InvalidTokenError(f"{typeof} '{name}': symbols {intersection_set} are forbidden in naming", exc_type="forbidden_symbol")
 
     for check in cfg:
         if name in check[0].keys():
-            raise VariableOvershadowError(f"{typeof} '{name}' overshadows {check[1]} '{name}'")
+            raise VariableOvershadowError(f"{typeof} '{name}' overshadows {(typeof==check[1])*'default '}{check[1]} '{name}'")
 
 
-def custom_operator(operator_expression: str): #operator '->': 1, l+r*4-1,false;  2 -> 3 = 2+3*4-1 = 13
+def parse_operator(operator_expression: str): #operator '->': 1, l+r*4-1,false;  2 -> 3 = 2+3*4-1 = 13
     """
     Converts operator expression to (sign, priority, function, is_right_associative)\n
     e.g. operator expression "operator '->': 1, l<=r, False" \n will be converted to (->, 1, l<=r, False)\n
@@ -130,7 +142,6 @@ def custom_operator(operator_expression: str): #operator '->': 1, l+r*4-1,false;
         elif s == "'":
             current_op_name += s
 
-
 class CompiledExpression(CallAllMethods):
     def __init__(self, expression: str, var_map = None, func_map = None):
         self.expression = expression
@@ -151,26 +162,51 @@ class CompiledExpression(CallAllMethods):
 
             if var.startswith("let"):
 
-                var_name, var_val = var[4:].split("=")
-                var_name = var_name.replace(" ", "")
-                var_val = var_val.replace(" ", "")
+                var = var[4:]
+                first_eq = var.find("=")
+                if first_eq == -1:
+                    raise SyntaxError(f"{var}: cannot define variable without '='")
+                var_name, var_val = var[:first_eq], var[first_eq+1:]
+
+                var_name = var_name.strip()
+                var_val = var_val.strip()
+                if len(var_name) == 0:
+                    raise SyntaxError(f"{var}: cannot define variable with empty name")
+                if len(var_val) == 0:
+                    raise SyntaxError(f"{var}: variable cannot be empty")
+
+                for op in vars.OPERATORS:
+                    if var_name.find(op) != -1:
+                        raise InvalidTokenError(f"Variable name '{var_name}' cannot contain operators('{op}')", exc_type="forbidden_symbol")
+
                 check_valid_name(var_name, "variable", self.var_map, self.func_map, self.op_map)
                 self.var_map[var_name] = var_val
 
             elif var.startswith("def"):
                 name, args, expr, min_args, max_args = parse_function(var)
                 check_valid_name(name, "function", self.var_map, self.func_map, self.op_map)
-
+                for arg in args:
+                    try:
+                        check_valid_name(arg[0], "argument", self.var_map, self.func_map, self.op_map)
+                    except VariableOvershadowError as e:
+                        raise VariableOvershadowError(f"Error defining with '{var}': "+str(e))
                 self.func_map[name] = (args, expr, min_args, max_args)
 
             elif var.startswith("operator"):
-                name, priority, op_expr, right_assoc = custom_operator(var)
+                name, priority, op_expr, right_assoc = parse_operator(var)
                 check_valid_name(name, "operator", self.var_map, self.func_map, self.op_map)
                 self.op_map[name] = (priority, op_expr, right_assoc)
 
-
-
         self.expression = splitted[-1]
 
+    def _d_check_starts_with_operators(self): #begins with _d to start after _compile_vars_and_functions
+        for op in list(self.op_map.keys())+list(vars.OPERATORS.keys()):
+            for func in self.func_map.keys():
+                if func.find(op) != -1:
+                    raise InvalidTokenError(f"Function name '{func}' cannot contain operators('{op}')", exc_type = "forbidden_symbol")
+            for var in self.var_map.keys():
+                if var.find(op) != -1:
+                    raise InvalidTokenError(f"Variable name '{var}' cannot contain operators('{op}')'", exc_type="forbidden_symbol")
+
 if __name__ == "__main__":
-    print(custom_operator("operator '=:': 1 l+r:=1"))
+    print(parse_operator("operator '=:': 1 l+r:=1"))

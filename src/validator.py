@@ -1,8 +1,8 @@
 import string
-
+import constants as cst
 import vars
 from compiler import CompiledExpression
-from extra.exceptions import InvalidParenthesisError, VariableOvershadowError
+from extra.exceptions import InvalidParenthesisError, VariableOvershadowError, InvalidTokenError
 
 from extra.utils import CallAllMethods
 
@@ -80,6 +80,11 @@ class CompiledValidExpression(CallAllMethods):
                 continue
             else:
                 cur_token+=s
+
+    def check_forbidden(self):
+        for s in self.expression:
+            if s in cst.FORBIDDEN_SYMBOLS:
+                raise InvalidTokenError(f"Symbol '{s}' is forbidden", exc_type="forbidden_symbol")
 
 
 

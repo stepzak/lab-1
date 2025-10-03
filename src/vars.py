@@ -1,4 +1,5 @@
 import decimal
+import math
 from typing import Callable, Dict, Union
 
 from extra.utils import check_is_integer
@@ -20,6 +21,12 @@ def non_negative_validator(*args, **kwargs):
     if not all(x>=0 for x in args):
         args = [str(arg) for arg in args]
         raise TypeError(f"Cannot apply '{kwargs['op']}' to {','.join(args)}: only non-negative values are allowed")
+
+def custom_sqrt(a: decimal.Decimal | int) -> decimal.Decimal | int:
+    ret = math.sqrt(a)
+    if ret.as_integer_ratio()[1]==1.0:
+        return int(ret)
+    return decimal.Decimal(ret)
 
 OPERATORS: Dict[str, tuple[float, Callable[[decimal.Decimal, decimal.Decimal], Union[decimal.Decimal, int]], bool, list[Callable] | None]] = {
         "+": (0, lambda x, y: x + y,  False, None),
@@ -46,7 +53,7 @@ FUNCTIONS_CALLABLE_ENUM: dict[str, tuple[Callable, list[Callable] | None]] = {
         "min": (min, None),
         "abs": (abs, None),
         "pow": (pow, [pow_validator]),
-        "sqrt": (lambda a: a.sqrt(), [non_negative_validator]) #function_name: (function, validators)
+        "sqrt": (custom_sqrt, [non_negative_validator]) #function_name: (function, validators)
     }
 
 FUNCTIONS_ARGS: dict[str, tuple[int, int]] = {  #func_symbol: (min_args, max_args)
