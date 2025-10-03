@@ -1,9 +1,10 @@
 import decimal
 import logging
 from sys import stdout
-
-import constants as cst # type: ignore
+import constants as cst
 from calculator import Calculator
+from extra.utils import check_is_integer, round_decimal
+
 
 def main():
     """
@@ -20,8 +21,13 @@ def main():
         except Exception:
             result = None
         try:
-            if cst.SCIENTIFIC_FORM and result:
-                result = ("{:."+str(cst.SCIENTIFIC_FORM)+"E}").format(decimal.Decimal(result))
+            if result:
+                result = round_decimal(result)  # type: ignore
+                if check_is_integer(result):
+                    result = int(result)
+
+                    if cst.SCIENTIFIC_FORM:
+                        result = ("{:."+str(cst.SCIENTIFIC_FORM)+"E}").format(decimal.Decimal(result))
             logger.info(f"{expression} = {result}")
         except ValueError:
             logger.error(f"Could not calculate expression {expression}: too many digits")

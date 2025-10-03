@@ -1,5 +1,4 @@
 import decimal
-import math
 from typing import Callable, Dict, Union
 
 from extra.utils import check_is_integer
@@ -25,10 +24,10 @@ def non_negative_validator(*args, **kwargs):
         raise TypeError(f"Cannot apply '{kwargs['op']}' to {','.join(args)}: only non-negative values are allowed")
 
 def custom_sqrt(a: decimal.Decimal | int) -> decimal.Decimal | int:
-    ret = math.sqrt(a)
+    ret = decimal.Decimal(a).sqrt()
     if ret.as_integer_ratio()[1]==1.0:
         return int(ret)
-    return decimal.Decimal(ret)
+    return ret
 
 OPERATORS: Dict[str, tuple[float, Callable[[decimal.Decimal, decimal.Decimal], Union[decimal.Decimal, int]], bool, list[Callable] | None]] = {
         "+": (0, lambda x, y: x + y,  False, None),

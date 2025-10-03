@@ -7,7 +7,7 @@ from typing import Union, Any, Sequence
 
 from compiler import CompiledExpression
 from extra.exceptions import InvalidParenthesisError, InvalidTokenError
-from extra.utils import check_is_integer, log_exception, round_decimal
+from extra.utils import check_is_integer, log_exception
 from validator import CompiledValidExpression, PreCompiledValidExpression
 from vars import FUNCTIONS_CALLABLE_ENUM, OPERATORS
 import constants as cst
@@ -38,6 +38,9 @@ class CustomFunctionExecutor:
 
 class Calculator:
 
+    """
+    Class for initializing and passing scopes while calculating(variables, functions, operators)
+    """
 
     def __init__(self, expression: str, var_map = None, func_map = None, op_map = None):
         self.expression = expression
@@ -49,15 +52,12 @@ class Calculator:
         self.tokens = ['']
         self.logger = logging.getLogger(__name__)
 
-
-
     @log_exception
     def calc(self) -> decimal.Decimal | int | None | tuple[
         Union[decimal.Decimal, None, int], Any, Any, Any]:
         """
         Calculates value of the expression
-        :return: (error code, value of the expression). Value can be returned as None if an error occurred during calculation process
-
+        :return: value of expression. Value can be returned as None if an error occurred during calculation process
         """
 
         pre_compiled = PreCompiledValidExpression(self.expression)
@@ -65,7 +65,6 @@ class Calculator:
 
         if not self.var_map:
             self.var_map = expression.var_map
-        #self.func_map = expression.func_map
         for k, v in expression.func_map.items():
             if isinstance(v[0], Sequence):
                 obj = CustomFunctionExecutor(v[0], v[1]) #type: ignore
@@ -89,15 +88,9 @@ class Calculator:
 
         result = self.rpn_and_calc()
 
-        if not result:
-            return result
         if type(result) is int:
             return result
-        result = round_decimal(result)  # type: ignore
-        if check_is_integer(result):
-            return int(result)
-        else:
-            return result
+        return result
 
     @log_exception
     def rpn_and_calc(self) -> decimal.Decimal | None | int:
@@ -313,15 +306,19 @@ class Calculator:
 
             def filter_func(x: str):
                 return x.startswith(tokens[-1]) or x.startswith(s)
-
             multi_symbols = list(filter(filter_func, self.op_map.keys()))
             multi_symbols += list(filter(filter_func, self.func_map.keys()))
             if self.var_map:
                 multi_symbols += list(filter(filter_func, self.var_map.keys()))
-            if any(tokens[-1] + s in ms for ms in multi_symbols) and len(multi_symbols) and s not in "+-":
+
+            extra_check_for_unary = True
+            if s in "+-":
+                extra_check_for_unary = not check_is_digit(expression[expr_ind + 1])
+
+            if any(tokens[-1] + s in ms for ms in multi_symbols) and len(multi_symbols):
                 tokens[-1] += s
 
-            elif any(s in ms and s for ms in multi_symbols) and len(multi_symbols) and s not in "-+":
+            elif any(s in ms and s for ms in multi_symbols) and len(multi_symbols) and extra_check_for_unary:
                     place_token(s)
             else:
                 if tokens[-1] in self.func_map.keys():
