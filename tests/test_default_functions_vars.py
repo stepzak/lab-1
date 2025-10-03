@@ -34,3 +34,18 @@ def test_vars_sqrt_bf(expression, expected):
 def test_invalid_lets(expression, exception):
     with pytest.raises(exception):
         calc(expression)
+
+
+@pytest.mark.parametrize("expression, exception",
+                         [
+                             ("sqrt(-1)", TypeError),
+                             ("sqrt()", TypeError),
+                             ("sqrt(1, 2)", TypeError),
+                             ("max()", TypeError),
+                             ("min()", TypeError),
+                             ("abs(1, -3)", TypeError),
+                             ("pow(1, -3.1, 3)", TypeError),
+                         ])
+def test_invalid_args(expression, exception):
+    with pytest.raises(exception):
+        calc(expression)

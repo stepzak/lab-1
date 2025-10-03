@@ -45,6 +45,7 @@ class CustomFunctionExecutor:
                 var_map.update({self.indexed_vars[i][0]: self.indexed_vars[i][1]})
         return calc(self.expression, var_map)
 
+@log_exceptions(logger=logger)
 def rpn_and_calc(tokens: list[str], var_map: dict[str, str]) -> decimal.Decimal | None | int:
     """
     Converts list of tokens to RPN and then calcs to value
@@ -131,7 +132,10 @@ def rpn_and_calc(tokens: list[str], var_map: dict[str, str]) -> decimal.Decimal 
                 validators = vars.FUNCTIONS_CALLABLE_ENUM[last_func[0]][1]
                 if validators:
                     for val in validators:
-                        val(*args, op=last_func[0])
+                        try:
+                            val(*args, op=last_func[0])
+                        except Exception:
+                            raise
                 if len(args) == 1:
                     logger.debug(f"Calling function {last_func[0]}({args[0]})")
                     try:
@@ -432,7 +436,7 @@ def main():
         except Exception:
             result = None
         try:
-            if cst.SCIENTIFIC_FORM:
+            if cst.SCIENTIFIC_FORM and result:
                 result = ("{:."+str(cst.SCIENTIFIC_FORM)+"E}").format(decimal.Decimal(result))
             logger.info(f"{expression} = {result}")
         except ValueError:

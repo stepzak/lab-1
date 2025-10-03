@@ -13,6 +13,8 @@ def pow_validator(*args, **kwargs):
                 raise TypeError("pow() 3rd argument not allowed unless all arguments are integers")
 
 def integer_validator(*args, **kwargs):
+    if isinstance(args[0], tuple):
+        args = args[0]
     if not all([check_is_integer(x) for x in args]):
         args = [str(arg) for arg in args]
         raise TypeError(f"Cannot apply '{kwargs['op']}' to {', '.join(args)}: only integers are allowed")
