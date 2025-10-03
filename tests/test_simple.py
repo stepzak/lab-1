@@ -1,7 +1,9 @@
+import decimal
+
 import pytest
 
 from extra.exceptions import InvalidTokenError, InvalidParenthesisError
-from main import calc
+from calculator import Calculator
 
 
 @pytest.mark.parametrize(
@@ -20,11 +22,11 @@ from main import calc
         "9*18<=5",
         "(2**3)**2!=512",
         "53 // 16",
-        "(53+14)//16+5%3+(34+18>=60)*52-2**3**4+(5!=4)*4-(3>=2-1)+(4==5-1)"
+        "(53+14)//16e2+5%3+(34.43+18>=60)*52.561-2**3-(21+63>4)"
     ]
 )
 def test_simple_ok(expression):
-    assert calc(expression) == eval(expression)
+    assert Calculator(expression).calc() == decimal.Decimal(eval(expression))
 
 
 @pytest.mark.parametrize("expression, exception",
@@ -39,7 +41,7 @@ def test_simple_ok(expression):
 )
 def test_simple_invalid_operands(expression, exception):
     with pytest.raises(exception):
-        calc(expression)
+        Calculator(expression).calc()
 
 @pytest.mark.parametrize("expression, exception",
     [
@@ -54,4 +56,4 @@ def test_simple_invalid_operands(expression, exception):
 )
 def test_simple_invalid_expressions(expression, exception):
     with pytest.raises(exception):
-        calc(expression)
+        Calculator(expression).calc()

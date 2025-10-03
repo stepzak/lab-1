@@ -50,20 +50,10 @@ OPERATORS: Dict[str, tuple[float, Callable[[decimal.Decimal, decimal.Decimal], U
     } #operator: (priority, function, is_right_assoc, validator
 
 
-FUNCTIONS_CALLABLE_ENUM: dict[str, tuple[Callable, list[Callable] | None]] = {
-        "max": (max, None),
-        "min": (min, None),
-        "abs": (abs, None),
-        "pow": (pow, [pow_validator]),
-        "sqrt": (custom_sqrt, [non_negative_validator]) #function_name: (function, validators)
+FUNCTIONS_CALLABLE_ENUM: dict[str, tuple[Callable, list[Callable] | None, tuple[int, int]]] = {
+        "max": (max, None, (1, -1)),
+        "min": (min, None, (1, -1)),
+        "abs": (abs, None, (1, 1)),
+        "pow": (pow, [pow_validator], (2, 3)),
+        "sqrt": (custom_sqrt, [non_negative_validator], (1, 1)) #function_name: (function, validators)
     }
-
-FUNCTIONS_ARGS: dict[str, tuple[int, int]] = {  #func_symbol: (min_args, max_args)
-        "max": (1, -1),
-        "min": (1, -1),
-        "abs": (1, 1),
-        "pow": (2, 3),
-        "sqrt": (1, 1)
-    }
-
-FUNCTIONS = list(FUNCTIONS_ARGS.keys())

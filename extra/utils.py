@@ -1,5 +1,4 @@
 import decimal
-import logging
 from functools import wraps
 import src.constants as cst
 
@@ -13,20 +12,20 @@ def round_decimal(dec: decimal.Decimal, n_digits: int = cst.ROUNDING_DIGITS, rou
     except decimal.InvalidOperation:
         return dec
 
-def log_exceptions(logger: logging.Logger):
-    def decorator(func):
-        """Decorator to automatically log exceptions"""
+def log_exception(func):
 
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            try:
-                return func(*args, **kwargs)
-            except Exception as e:
-                logger.exception(f"Exception in {func.__name__}: {e}")
-                raise
+    """Decorator to automatically log exceptions"""
 
-        return wrapper
-    return decorator
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+
+        try:
+            return func(self, *args, **kwargs)
+        except Exception as e:
+            self.logger.exception(f"Exception in {func.__name__}: {e}")
+            raise
+
+    return wrapper
 
 
 class CallAllMethods:

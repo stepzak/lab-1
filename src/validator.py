@@ -40,8 +40,8 @@ class PreCompiledValidExpression(CallAllMethods):
         """
         expr_to_check = self.expression.replace(" =", "=")
         checks = ["let let=", "def let("]
-        checks += list([f"let {dfn}=" for dfn in vars.FUNCTIONS])
-        checks += list([f"def {dfn}(" for dfn in vars.FUNCTIONS])
+        checks += list([f"let {dfn}=" for dfn in vars.FUNCTIONS_CALLABLE_ENUM.keys()])
+        checks += list([f"def {dfn}(" for dfn in vars.FUNCTIONS_CALLABLE_ENUM.keys()])
         for check in checks:
 
             if check in expr_to_check:
@@ -52,7 +52,7 @@ class PreCompiledValidExpression(CallAllMethods):
 class CompiledValidExpression(CallAllMethods):
     def __init__(self, expression: CompiledExpression):
         self.expression = expression.expression
-        self.AVAILABLE_SYMBOLS = ''.join(expression.var_map.keys())+''.join(vars.FUNCTIONS)+''.join(vars.OPERATORS.keys())+"(),[]"+string.digits+"let;defreturn"
+        self.AVAILABLE_SYMBOLS = ''.join(expression.var_map.keys())+''.join(vars.FUNCTIONS_CALLABLE_ENUM.keys())+''.join(vars.OPERATORS.keys())+"(),[]"+string.digits+"let;defreturn"
         self.var_map = expression.var_map
         self.call_all_methods()
 

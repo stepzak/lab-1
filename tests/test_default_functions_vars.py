@@ -1,7 +1,9 @@
 import pytest
 from decimal import Decimal
-from main import calc
 
+import vars
+from calculator import Calculator
+from extra.exceptions import InvalidTokenError
 
 @pytest.mark.parametrize("expression",
                          [
@@ -13,7 +15,7 @@ from main import calc
                          ]
 )
 def test_basic_functions(expression):
-    assert calc(expression)==eval(expression)
+    assert Calculator(expression).calc()==eval(expression)
 
 
 @pytest.mark.parametrize("expression, expected",
@@ -21,7 +23,7 @@ def test_basic_functions(expression):
                              ("let x = 5; let y = x+5; sqrt(y+ x)**2", Decimal(15).sqrt()**2)
                          ])
 def test_vars_sqrt_bf(expression, expected):
-    assert calc(expression)==expected
+    assert Calculator(expression).calc()==expected
 
 
 @pytest.mark.parametrize("expression, exception",
@@ -33,7 +35,7 @@ def test_vars_sqrt_bf(expression, expected):
                          ])
 def test_invalid_lets(expression, exception):
     with pytest.raises(exception):
-        calc(expression)
+        Calculator(expression).calc()
 
 
 @pytest.mark.parametrize("expression, exception",
@@ -48,4 +50,12 @@ def test_invalid_lets(expression, exception):
                          ])
 def test_invalid_args(expression, exception):
     with pytest.raises(exception):
-        calc(expression)
+        Calculator(expression).calc()
+
+@pytest.mark.parametrize("expression, exception",
+                         [
+                             (f"let x{op} = 5;", InvalidTokenError) for op in vars.OPERATORS.keys() if op not in ["==", "!="]
+                         ])
+def test_invalid_operators(expression, exception):
+    with pytest.raises(exception):
+        Calculator(expression).calc()

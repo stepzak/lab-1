@@ -93,7 +93,7 @@ def check_valid_name(name: str, typeof: Literal["operator", "function", "variabl
 
     intersection_set = set(name) & NAME_FORBIDDEN_SYMBOLS
     if name in SYSTEM_NAMES:
-        raise SyntaxError(f"{typeof} '{name}' is forbidden: it is a system name")
+        raise VariableOvershadowError(f"{typeof} '{name}' is forbidden: it is a system name")
     if intersection_set:
         raise InvalidTokenError(f"{typeof} '{name}': symbols {intersection_set} are forbidden in naming", exc_type="forbidden_symbol")
 
@@ -121,6 +121,8 @@ def parse_operator(operator_expression: str): #operator '->': 1, l+r*4-1,false; 
 
     for i in range(len(sliced)):
         s = sliced[i]
+        if s in "()":
+            raise InvalidTokenError("Operator name cannot contain brackets", exc_type="forbidden_symbol")
         if len(current_op_name)>1:
             if current_op_name[-1]=="'":
                 if i==" ":
@@ -131,23 +133,21 @@ def parse_operator(operator_expression: str): #operator '->': 1, l+r*4-1,false; 
                 except ValueError:
                     raise SyntaxError(
                         f"""Invalid syntax for defining operator {current_op_name}: {expr}, template: operator 'operator_sign': (priority), (expression via l and r), (is right associative)""")
-                return current_op_name.replace("'", ""), float(priority), full_expr, True if right_assoc in ["True", "true", "1"] else False
+                return current_op_name.replace("'", "").strip(), float(priority), full_expr, True if right_assoc.strip() in ["True", "true", "1"] else False
 
-        if s == "'" and current_op_name == "":
+        if s == "'":
             current_op_name+="'"
         elif current_op_name.startswith("'") and s!="'":
             current_op_name += s
             if s==" ":
                 raise SyntaxError("Operator sign cannot contain whitespaces")
-        elif s == "'":
-            current_op_name += s
 
 class CompiledExpression(CallAllMethods):
-    def __init__(self, expression: str, var_map = None, func_map = None):
+    def __init__(self, expression: str, var_map = None, func_map = None, op_map = None):
         self.expression = expression
         self.var_map = var_map or {}
         self.func_map = func_map or {}
-        self.op_map: dict = {}
+        self.op_map = op_map or {}
         self.expression = self.expression.replace(",)", ")")
         self.call_all_methods()
 
@@ -190,7 +190,7 @@ class CompiledExpression(CallAllMethods):
                         check_valid_name(arg[0], "argument", self.var_map, self.func_map, self.op_map)
                     except VariableOvershadowError as e:
                         raise VariableOvershadowError(f"Error defining with '{var}': "+str(e))
-                self.func_map[name] = (args, expr, min_args, max_args)
+                self.func_map[name] = (args, expr, (min_args, max_args))
 
             elif var.startswith("operator"):
                 name, priority, op_expr, right_assoc = parse_operator(var)
