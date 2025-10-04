@@ -8,6 +8,12 @@ from extra.utils import CallAllMethods
 
 
 class PreCompiledValidExpression(CallAllMethods):
+    """
+    CLass to validate pre compiled expression
+    :param expression: expression to validate
+    :raises InvalidParenthesisError: invalid parenthesis
+    :raises VariableOvershadowError: some of the names overshadow default ones
+    """
     def __init__(self, expression: str):
         self.expression = str(expression)
 
@@ -36,10 +42,10 @@ class PreCompiledValidExpression(CallAllMethods):
         """
         Checks if vars do not overshadow default function names(DFN)
         :return: None
-        :raises InvalidVariableNameError: if vars do overshadow default function names(DFN)
+        :raises VariableOvershadowError: if vars do overshadow default function names(DFN)
         """
-        expr_to_check = self.expression.replace(" =", "=")
-        checks = ["let let=", "def let("]
+        expr_to_check = self.expression.replace(" =", "=").strip().replace(" (", "(")
+        checks = ["let let=", "def let(", "def operator(", "let operator=", "def def(", "def return(", "let return=", "let def="]
         checks += list([f"let {dfn}=" for dfn in vars.FUNCTIONS_CALLABLE_ENUM.keys()])
         checks += list([f"def {dfn}(" for dfn in vars.FUNCTIONS_CALLABLE_ENUM.keys()])
         for check in checks:
@@ -53,6 +59,7 @@ class CompiledValidExpression(CallAllMethods):
     """
     Compiled expression validator.
     :param expression: expression to validate
+    :raises InvalidTokenError: forbidden symbol detected
     """
     def __init__(self, expression: CompiledExpression):
         self.expression = expression.expression

@@ -342,9 +342,11 @@ class Calculator:
                         while check_is_digit(tokens[-1]+s):
                             tokens[-1]+=s
                             expr_ind+=1
+                            if len(expression)-1<expr_ind:
+                                break
                             s = expression[expr_ind]
                         raise SyntaxError(f"Missed operation between {tokens[-3]} and {tokens[-1]}")
-            if s == " ":
+            if s == " " and not tokens[-1].isspace():
                 tokens.append(" ")
                 continue
 
@@ -404,19 +406,19 @@ class Calculator:
                     if not check_is_digit(res):  # context management: if previous one was not a digit, it is a unary "-"
                         tokens.extend(("-1", "*"))
                         if res not in "()[] " and not res.isspace():
-                            self.logger.warning(f"Two operations({res}-), '-' is unary one after other detected")
+                            self.logger.warning(f"Two operations({res}-), '-' is unary: one after other detected")
                     else:
                         place_token("-")  # else it is a substraction
                 elif s == "+":
                     for i in range(1, len(tokens)+1):
-                        if tokens[-i] != "":
+                        if not tokens[-i].isspace():
                             res = tokens[-i]
                             break
                     else:
                         res = tokens[-1]
-                    if not check_is_digit(res) and res not in "()[]" and res!="":
-                        self.logger.warning(f"Two operations({tokens[-1]}+), '+' is unary one after other detected")
-                    else:
+                    if not check_is_digit(res) and res not in "()[]" and not res.isspace():
+                        self.logger.warning(f"Two operations({res}+), '+' is unary: one after other detected")
+                    elif check_is_digit(res) or res in "()[]":
                         tokens.append("+")
                     continue
 
