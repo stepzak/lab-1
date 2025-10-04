@@ -9,7 +9,7 @@ from extra.utils import CallAllMethods
 
 class PreCompiledValidExpression(CallAllMethods):
     def __init__(self, expression: str):
-        self.expression = expression
+        self.expression = str(expression)
 
         self.call_all_methods()
 
@@ -50,43 +50,22 @@ class PreCompiledValidExpression(CallAllMethods):
 
 
 class CompiledValidExpression(CallAllMethods):
+    """
+    Compiled expression validator.
+    :param expression: expression to validate
+    """
     def __init__(self, expression: CompiledExpression):
         self.expression = expression.expression
         self.AVAILABLE_SYMBOLS = ''.join(expression.var_map.keys())+''.join(vars.FUNCTIONS_CALLABLE_ENUM.keys())+''.join(vars.OPERATORS.keys())+"(),[]"+string.digits+"let;defreturn"
         self.var_map = expression.var_map
+        self.func_map = expression.func_map
+        self.op_map = expression.op_map
         self.call_all_methods()
-
-
-    def _check_beginning(self):
-        oper = ""
-        cur_token = ""
-        for i in range(len(self.expression)):
-            s = self.expression[i]
-
-
-            if len(oper):
-                if oper+s in vars.OPERATORS.keys():
-                    oper+=s
-                    continue
-                elif s.isdigit() or s in self.var_map.keys():
-                    return
-                #raise InvalidTokenError(f"Unfinished line: operation '{oper}' has no first operand",
-                 #                       exc_type="invalid_token")
-            if cur_token in vars.FUNCTIONS_CALLABLE_ENUM.keys() or s.isdigit() or cur_token in self.var_map.keys():
-                return
-
-            elif s in vars.OPERATORS.keys() and s not in ("+", "-"):
-                oper = s
-                continue
-            else:
-                cur_token+=s
 
     def check_forbidden(self):
         for s in self.expression:
             if s in cst.FORBIDDEN_SYMBOLS:
                 raise InvalidTokenError(f"Symbol '{s}' is forbidden", exc_type="forbidden_symbol")
-
-
 
 if __name__ == "__main__":
     print(PreCompiledValidExpression("5+(1)"))

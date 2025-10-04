@@ -21,7 +21,7 @@ def main():
         except Exception:
             result = None
         try:
-            if result:
+            if type(result) is not int and result:
                 result = round_decimal(result)  # type: ignore
                 if check_is_integer(result):
                     result = int(result)
@@ -44,5 +44,4 @@ if __name__ == "__main__":
         ],
         format=cst.FORMAT
     )
-    #logger.info(tokenize(CompiledExpression("max((2//3), 2)")))
     main()

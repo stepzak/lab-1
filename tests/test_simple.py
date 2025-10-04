@@ -45,8 +45,8 @@ def test_simple_invalid_operands(expression, exception):
 
 @pytest.mark.parametrize("expression, exception",
     [
-        ("*-5+3", SyntaxError),
-        ("2+5*", SyntaxError),
+        ("*-5+3", InvalidTokenError),
+        ("2+5*", InvalidTokenError),
         ("2 5+6", SyntaxError),
         ("x+5", InvalidTokenError),
         ("5+((3-4)", InvalidParenthesisError),

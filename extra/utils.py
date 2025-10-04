@@ -6,6 +6,13 @@ def check_is_integer(dec: decimal.Decimal) -> bool:
     return dec.as_integer_ratio()[1] == 1.0
 
 def round_decimal(dec: decimal.Decimal, n_digits: int = cst.ROUNDING_DIGITS, rounding=cst.ROUNDING):
+    """
+    Rounds decimal to n digits after point
+    :param dec: decimal to round
+    :param n_digits: number of digits to round to
+    :rounding: rounding method
+    :return: rounded decimal
+    """
     quantizer = decimal.Decimal('1.' + '0' * n_digits)
     try:
         return dec.quantize(quantizer, rounding=rounding)
@@ -29,6 +36,9 @@ def log_exception(func):
 
 
 class CallAllMethods:
+    """
+    Calls every method of the object
+    """
     def call_all_methods(self, instance = None):
         if not instance:
             instance = self

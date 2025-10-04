@@ -2,6 +2,7 @@ from typing import Any, Literal
 import vars
 from constants import NAME_FORBIDDEN_SYMBOLS, SYSTEM_NAMES
 from extra.exceptions import InvalidTokenError, VariableOvershadowError
+from extra.types import Variable
 from extra.utils import CallAllMethods
 
 def parse_function(func_expression: str) -> tuple[str, list[tuple[str, str | None]], str, int | Any, int] | None:
@@ -141,6 +142,8 @@ def parse_operator(operator_expression: str): #operator '->': 1, l+r*4-1,false; 
             current_op_name += s
             if s==" ":
                 raise SyntaxError("Operator sign cannot contain whitespaces")
+    return None
+
 
 class CompiledExpression(CallAllMethods):
     def __init__(self, expression: str, var_map = None, func_map = None, op_map = None):
@@ -180,7 +183,7 @@ class CompiledExpression(CallAllMethods):
                         raise InvalidTokenError(f"Variable name '{var_name}' cannot contain operators('{op}')", exc_type="forbidden_symbol")
 
                 check_valid_name(var_name, "variable", self.var_map, self.func_map, self.op_map)
-                self.var_map[var_name] = var_val
+                self.var_map[var_name] = Variable(var_val, False)
 
             elif var.startswith("def"):
                 name, args, expr, min_args, max_args = parse_function(var)
@@ -190,7 +193,7 @@ class CompiledExpression(CallAllMethods):
                         check_valid_name(arg[0], "argument", self.var_map, self.func_map, self.op_map)
                     except VariableOvershadowError as e:
                         raise VariableOvershadowError(f"Error defining with '{var}': "+str(e))
-                self.func_map[name] = (args, expr, (min_args, max_args))
+                self.func_map[name] = (args, expr, min_args, max_args)
 
             elif var.startswith("operator"):
                 name, priority, op_expr, right_assoc = parse_operator(var)

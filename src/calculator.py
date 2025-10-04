@@ -3,10 +3,11 @@ import logging
 import string
 import sys
 from math import log10, floor
-from typing import Union, Any, Sequence
+from typing import Union, Any
 
 from compiler import CompiledExpression
 from extra.exceptions import InvalidParenthesisError, InvalidTokenError
+from extra.types import Function, Operator, Variable
 from extra.utils import check_is_integer, log_exception
 from validator import CompiledValidExpression, PreCompiledValidExpression
 from vars import FUNCTIONS_CALLABLE_ENUM, OPERATORS
@@ -18,22 +19,43 @@ getcontext().prec = cst.PRECISION
 sys.set_int_max_str_digits(cst.MAXIMUM_DIGITS)
 
 class CustomFunctionExecutor:
-    def __init__(self, indexed_vars: list[tuple[str, Union[str, None]]],  expression: str):
+    """
+    Class to call user defined functions
+    :param indexed_args: list of tuples: (arg_name, arg_default_value | None)
+    :param: expression: expression defined by user after return statement
+    """
+    def __init__(self, name: str, indexed_args: list[tuple[str, Union[str, None]]],  expression: str):
+        self.name = name
         self.expression = expression
-        self.indexed_vars = indexed_vars
+        self.indexed_vars = indexed_args
 
-    def execute_function(self, *args, var_map: dict, func_map: dict, op_map: dict) -> decimal.Decimal:
+    def execute_function(self, *args, var_map: dict, func_map: dict[str, Function],
+                         op_map: dict[str, Operator], outer_names = None) -> decimal.Decimal:
+        """
+        Executes user defined function
+        :param args: numbers passed as arguments to the function
+        :param var_map: map from variable name to variable expression
+        :param func_map: map from defined function name to its Function type dataclass
+        :param op_map: map from defined operator to its Operator type dataclass
+        :param outer_names: list of names, calculations for which were called recursively(variables, functions)
+        :return: function result
+        """
+        outer_names = outer_names or []
+        outer_names.append(self.name)
         var_map = var_map.copy()
         for i in range(len(self.indexed_vars)):
             try:
                 if args[i] is not None:
-                    var_map.update({self.indexed_vars[i][0]: str(args[i])})
+                    var_map.update({self.indexed_vars[i][0]: Variable(args[i], True)})
                 else:
                     raise IndexError
             except IndexError:
-                var_map.update({self.indexed_vars[i][0]: self.indexed_vars[i][1]})
-        new_calc = Calculator(self.expression, var_map, func_map, op_map)
-        return new_calc.calc()
+                var_map.update({self.indexed_vars[i][0]: Variable(self.indexed_vars[i][1], True)}) #type: ignore
+        new_calc = Calculator(self.expression, var_map, func_map, op_map, outer_names_buffer=outer_names)
+        try:
+            return new_calc.calc()
+        except RecursionError:
+            raise RecursionError(f"Name {self.name} defined with expression: {self.expression} is recursive. Recursion is not (yet) supported.")
 
 
 class Calculator:
@@ -42,15 +64,17 @@ class Calculator:
     Class for initializing and passing scopes while calculating(variables, functions, operators)
     """
 
-    def __init__(self, expression: str, var_map = None, func_map = None, op_map = None):
+    def __init__(self, expression: str, var_map = None, func_map = None, op_map = None, outer_names_buffer = None):
         self.expression = expression
-        self.var_map = var_map
-        self.func_map = FUNCTIONS_CALLABLE_ENUM.copy()
+        self.var_map: dict[str, Variable] = var_map or {}
+        self.func_map: dict[str, Function] = FUNCTIONS_CALLABLE_ENUM.copy()
         self.func_map.update(func_map or {})
-        self.op_map = OPERATORS.copy()
+        self.op_map: dict[str, Operator] = OPERATORS.copy()
         self.op_map.update(op_map or {})
-        self.tokens = ['']
+        self.tokens = ['  ']
         self.logger = logging.getLogger(__name__)
+        self.outer_names_buffer = outer_names_buffer or []
+        self.logger.debug(f"outer_names_buffer: {self.outer_names_buffer}")
 
     @log_exception
     def calc(self) -> decimal.Decimal | int | None | tuple[
@@ -66,16 +90,15 @@ class Calculator:
         if not self.var_map:
             self.var_map = expression.var_map
         for k, v in expression.func_map.items():
-            if isinstance(v[0], Sequence):
-                obj = CustomFunctionExecutor(v[0], v[1]) #type: ignore
-                self.func_map[k] = (obj.execute_function, None, v[2])
+            if not isinstance(v, Function):
+                obj = CustomFunctionExecutor(k, v[0], v[1])  #type: ignore
+                self.func_map[k] = Function(obj.execute_function, [], v[2], v[3])
         args = [('l', None), ('r', None)]
         for k, v in expression.op_map.items():
-              # type: ignore
-            if callable(v[1]):
+            if isinstance(v, Operator):
                 continue
-            obj = CustomFunctionExecutor(args, v[1])  # type: ignore
-            pl = (v[0], obj.execute_function, v[2], None)
+            obj = CustomFunctionExecutor(k, args, v[1])  # type: ignore
+            pl = Operator(v[0], obj.execute_function, v[2], [])
             self.logger.debug(f"setting new operator {k} as {pl}")
             self.op_map[k] = pl
 
@@ -95,7 +118,7 @@ class Calculator:
     @log_exception
     def rpn_and_calc(self) -> decimal.Decimal | None | int:
         """
-        Converts list of tokens to RPN and then calcs to value
+        Converts list of tokens to RPN and then calcs their value
         :return: value of RPN-converted tokens
         """
         operators = self.op_map
@@ -116,9 +139,9 @@ class Calculator:
             del output[-2:]
 
             op_to_run = operators[operator]
-            if op_to_run[3]:
-                for validator in op_to_run[3]:
-                    validator(a, b, op=operator)
+
+            for validator in op_to_run.validators:
+                validator(a, b, op=operator)
             try:
                 if a != 0 and b != 0:
                     abs_a, abs_b = float(abs(a)), float(abs(b))  # type: ignore
@@ -143,12 +166,12 @@ class Calculator:
                         self.logger.warning(
                             f"Operation {a} ** {b} will lead to at least {n_digits}(warning set on {cst.MAXIMUM_DIGITS_WARNING})")
 
-                to_app = op_to_run[1](a, b)
+                to_app = op_to_run.callable_function(a, b)
                 if check_is_integer(to_app):
                     to_app = int(to_app)  # type: ignore
                 output.append(to_app)
             except TypeError:
-                to_app = op_to_run[1](a, b, var_map=self.var_map, func_map=func_map, op_map=self.op_map)
+                to_app = op_to_run.callable_function(a, b, var_map=self.var_map, func_map=func_map, op_map=self.op_map, outer_names = self.outer_names_buffer)
                 if check_is_integer(to_app):
                     to_app = int(to_app)  # type: ignore
                 output.append(to_app)
@@ -157,7 +180,7 @@ class Calculator:
                 raise TypeError(f"Cannot apply {operator} to '{a}' and '{b}'")
 
         for t in self.tokens:
-            if t in ['', " "]:
+            if t.isspace():
                 continue
 
             if t in funcs:
@@ -171,35 +194,35 @@ class Calculator:
                     continue
 
                 elif t == ',':
-                    new_calc = Calculator("", self.var_map, func_map, self.op_map)
+                    new_calc = Calculator("", self.var_map, func_map, self.op_map, self.outer_names_buffer)
                     new_calc.tokens = last_func[1]
                     last_func[2].append(new_calc.rpn_and_calc())
                     last_func[1].clear()
 
                 elif t == "]":
-                    new_calc = Calculator("", self.var_map, func_map, self.op_map)
+                    new_calc = Calculator("", self.var_map, func_map, self.op_map, self.outer_names_buffer)
                     new_calc.tokens = last_func[1]
                     last_func[2].append(new_calc.rpn_and_calc())
 
                     args = last_func[2]
-                    func = func_map[last_func[0]][0]
-                    validators = func_map[last_func[0]][1]
-                    if validators:
-                        for val in validators:
-                            try:
-                                val(*args, op=last_func[0])
-                            except Exception:
-                                raise
+                    func = func_map[last_func[0]].callable_function
+                    validators = func_map[last_func[0]].validators
+
+                    for val in validators:
+                        try:
+                            val(*args, op=last_func[0])
+                        except Exception:
+                            raise
                     if len(args) == 1:
                         self.logger.debug(f"Calling function {last_func[0]}({args[0]})")
                         try:
-                            res = func(args[0], var_map=self.var_map, func_map=func_map, op_map=self.op_map)
+                            res = func(args[0], var_map=self.var_map, func_map=func_map, op_map=self.op_map, outer_names  = self.outer_names_buffer)
                         except TypeError:
                             res = func(args[0])
                     else:
                         self.logger.debug(f"Calling function {last_func[0]}({args})")
                         try:
-                            res = func(*args, var_map=self.var_map, func_map=func_map, op_map=self.op_map)
+                            res = func(*args, var_map=self.var_map, func_map=func_map, op_map=self.op_map, outer_names = self.outer_names_buffer)
                         except TypeError:
                             res = func(*args)
                     stack_functions.pop()
@@ -221,7 +244,10 @@ class Calculator:
                 except decimal.InvalidOperation:
 
                     if t in self.var_map.keys():
-                        cls = Calculator(self.var_map[t], self.var_map, func_map, self.op_map)
+                        var = self.var_map[t]
+                        if not var.local:
+                            self.outer_names_buffer.append(t)
+                        cls = Calculator(self.var_map[t].value, self.var_map, func_map, self.op_map, self.outer_names_buffer)
                         result = cls.calc()
                         to_app = decimal.Decimal(result)
                         if check_is_integer(to_app):
@@ -237,7 +263,7 @@ class Calculator:
                             prev = stack_ops[-1]
                             prev_op = operators[prev]
                             cur_op = operators[t]
-                            while (-2 * (prev_op[2] is True and cur_op[2] is True) + 1) * prev_op[0] >= cur_op[0]:
+                            while (-2 * (prev_op.is_right is True and cur_op.is_right is True) + 1) * prev_op.priority >= cur_op.priority:
                                 call_operator(stack_ops.pop())
                                 if not len(stack_ops) or stack_ops[-1] == "(":
                                     break
@@ -270,13 +296,13 @@ class Calculator:
 
         expression = compiled_expression.expression.strip()
 
-        tokens: list[str] = [""]
+        tokens: list[str] = ["  "]
 
         def place_token(token: str):
-            if tokens[-1] == " ":
-                tokens[-1] = token
-            else:
-                tokens.append(token)
+            """
+            For extra conditions in the future
+            """
+            tokens.append(token)
 
         digitable = list(self.func_map.keys()) + list(string.digits) + list(self.var_map.keys())
 
@@ -294,12 +320,21 @@ class Calculator:
                 except ValueError:
                     return False
 
-        known_tokens = digitable + list(self.op_map.keys()) + ["[", "]", "(", ")", ',', '.', 'e', ' ', '']
+        known_tokens = digitable + list(self.op_map.keys()) + ["[", "]", "(", ")", ',', '.', 'e', ' ', '', "  "]
         current_functions: list[tuple[list[str], list[int], list[
             int]]] = []  # list of parsing functions. ({func_symbol}, {arg_count}, {parenthesis_count})
         for expr_ind in range(len(expression)):
-
             s = expression[expr_ind]
+            if len(tokens)>=2:
+                if tokens[-2] in self.outer_names_buffer:
+                    raise RecursionError(f"Name '{tokens[-2]}' defined with itself({expression}). Recursion is not (yet) supported")
+                if len(tokens)>2:
+                    if tokens[-2].isspace() and check_is_digit(tokens[-1])==check_is_digit(tokens[-3]):
+                        while check_is_digit(tokens[-1]+s):
+                            tokens[-1]+=s
+                            expr_ind+=1
+                            s = expression[expr_ind]
+                        raise SyntaxError(f"Missed operation between {tokens[-3]} and {tokens[-1]}")
             if s == " ":
                 tokens.append(" ")
                 continue
@@ -311,9 +346,13 @@ class Calculator:
             if self.var_map:
                 multi_symbols += list(filter(filter_func, self.var_map.keys()))
 
-            extra_check_for_unary = True
-            if s in "+-":
-                extra_check_for_unary = not check_is_digit(expression[expr_ind + 1])
+            extra_check_for_unary = True and len(tokens)>1
+            if s in "+-" and len(tokens)>1:
+                try:
+                    extra_check_for_unary = not check_is_digit(expression[expr_ind + 1])
+                except IndexError:
+                    raise InvalidTokenError(f"Unfinished line: operation '{s}' has no second operand",
+                                            exc_type="invalid_token")
 
             if any(tokens[-1] + s in ms for ms in multi_symbols) and len(multi_symbols):
                 tokens[-1] += s
@@ -331,8 +370,7 @@ class Calculator:
                         if func[1][0] == 0:
                             func[1][0] += 1
                 if s.isdigit() or s in (".", "e"):  # if current symbol is digit
-                    if not check_is_digit(tokens[
-                                              -1]):  # if previous one was not a digit we append the symbol as the first digit of a number
+                    if not check_is_digit(tokens[-1]):  # if previous one was not a digit we append the symbol as the first digit of a number
                         place_token(s)
                         if check_is_digit(tokens[-1]) and check_is_digit(tokens[-2]):
                             for digit in expression[expr_ind + 1:]:
@@ -355,7 +393,7 @@ class Calculator:
                         res = tokens[-1]
                     if not check_is_digit(res):  # context management: if previous one was not a digit, it is a unary "-"
                         tokens.extend(("-1", "*"))
-                        if res not in "()[] " and res!="":
+                        if res not in "()[] " and not res.isspace():
                             self.logger.warning(f"Two operations({res}-), '-' is unary one after other detected")
                     else:
                         place_token("-")  # else it is a substraction
@@ -380,12 +418,13 @@ class Calculator:
                             break
                         elif tokens[-i] in self.op_map.keys():
                             raise SyntaxError(f"Two operations one after other: {tokens[-i]}{s}")
+                    place_token(s)
                 elif s == ")":
                     for i in range(1, len(tokens) - 1):
                         if check_is_digit(tokens[-i]):
                             break
                         elif tokens[-i] in self.op_map.keys():
-                            raise SyntaxError(f"Operation '{tokens[-i]}' has no second operand")
+                            raise SyntaxError(f"Unfinished line: operation '{tokens[-i]}' has no second operand")
                         elif tokens[-i] == "(":
                             if not len(current_functions):
                                 raise InvalidParenthesisError("Empty parenthesis", exc_type="empty")
@@ -410,7 +449,7 @@ class Calculator:
                     elif s == ")":
                         cur_func[2][0] -= 1
                         if cur_func[2][0] < 0:
-                            min_func_args = self.func_map[cur_func[0][0][:-1]][2][0]
+                            min_func_args = self.func_map[cur_func[0][0][:-1]].min_args
                             if min_func_args != -1 and min_func_args > cur_func[1][0]:
                                 func_name = cur_func[0][0][:-1]
                                 raise TypeError(
@@ -424,7 +463,7 @@ class Calculator:
                     elif s == ",":
                         cur_func[1][0] += 1
                         args: int = cur_func[1][0]
-                        max_func_args = self.func_map[cur_func[0][0][:-1]][2][1]
+                        max_func_args = self.func_map[cur_func[0][0][:-1]].max_args
                         if max_func_args != -1 and max_func_args < args:
                             func_name = cur_func[0][0][:-1]
 
@@ -432,6 +471,20 @@ class Calculator:
                                 f"TypeError: {func_name} requires maximum of {max_func_args} arguments but at least {cur_func[1]} were given")
 
         self.logger.debug(f"{tokens=}")
-        if tokens[-1] in OPERATORS.keys():
-            raise SyntaxError("Unfinished line")
+        if tokens[-1] in self.outer_names_buffer:
+            raise RecursionError(f"Name '{tokens[-1]}' defined with itself({expression}). Recursion is not (yet) supported")
+        for t in tokens[::-1]:
+            if t in self.op_map.keys() and t not in "+-":
+                raise InvalidTokenError(f"Unfinished line: operation '{t}' has no second operand",
+                                        exc_type="invalid_token")
+            elif check_is_digit(t):
+                break
+
+        for t in tokens:
+            if t in self.op_map.keys() and t not in "+-":
+                raise InvalidTokenError(f"Unfinished line: operation '{t}' has no first operand",
+                                        exc_type="invalid_token")
+            elif check_is_digit(t):
+                break
+
         return tokens

@@ -26,7 +26,7 @@ def test_invalid_defines(expression, exception):
                              ("def f(x, y=3): return x -> y; operator '->': 3, l+r**2, false; f(2)", 11),
                              ("def f(x, y=3): return x -> y; operator '->': 3, l+r**2, false; f(2, 4)", 18),
                              ("let x = 5; def f(x): return x+5; f(3)+x", 13),
-                             ("let x = 5; let xy = 6; operator '$': 3, l*r-16,true; operator '#': 2, (l$r)%2, false; xy#x$3 + x$xy$xy", 6)
+                             ("let x = 5; let xy = 6; operator '$': 3, l*r-16,true; operator '#': 2, (l$r)%2, false; xy#x$3 + x$xy$xy", 84)
                          ])
 def test_valid_functions(expression, result):
     assert Calculator(expression).calc() == result
