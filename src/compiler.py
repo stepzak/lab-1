@@ -157,7 +157,7 @@ def parse_operator(operator_expression: str):  # operator '->': 1, l+r*4-1,false
                     raise SyntaxError(
                         f"""Invalid syntax for defining operator {current_op_name}: {expr}, template: operator 'operator_sign': (priority), (expression via l and r), (is right associative)""")
                 return current_op_name.replace("'", "").strip(), float(
-                    priority), full_expr, True if right_assoc.strip() in ["True", "true", "1"] else False
+                    priority), full_expr, True if right_assoc.strip().lower() in ["true", "1"] else False
 
         if s == "'":
             current_op_name += "'"
