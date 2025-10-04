@@ -14,6 +14,9 @@ from extra.exceptions import VariableOvershadowError, InvalidTokenError
                              ("def 1(): return 1;", VariableOvershadowError),
                              ("operator 'let': 1,l+r,f; ", VariableOvershadowError),
                              ("def f(x=3, y): return 1; f(3)", ValueError),
+                             ("operator '->': 2, l#r,false; operator '#': 2,l->r,false; 3->4", RecursionError),
+                             ("def f(x): return g(x); def g(x): return f(x); f(1)", RecursionError),
+                             ("let y = y+ 5; let x = y; x", RecursionError),
                          ]
  )
 def test_invalid_defines(expression, exception):

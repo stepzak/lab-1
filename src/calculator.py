@@ -30,7 +30,7 @@ class CustomFunctionExecutor:
         self.indexed_vars = indexed_args
 
     def execute_function(self, *args, var_map: dict, func_map: dict[str, Function],
-                         op_map: dict[str, Operator], outer_names = None) -> decimal.Decimal:
+                         op_map: dict[str, Operator], outer_names: list[str]) -> decimal.Decimal:
         """
         Executes user defined function
         :param args: numbers passed as arguments to the function
@@ -52,16 +52,19 @@ class CustomFunctionExecutor:
             except IndexError:
                 var_map.update({self.indexed_vars[i][0]: Variable(self.indexed_vars[i][1], True)}) #type: ignore
         new_calc = Calculator(self.expression, var_map, func_map, op_map, outer_names_buffer=outer_names)
-        try:
-            return new_calc.calc()
-        except RecursionError:
-            raise RecursionError(f"Name {self.name} defined with expression: {self.expression} is recursive. Recursion is not (yet) supported.")
+
+        return new_calc.calc()
 
 
 class Calculator:
 
     """
     Class for initializing and passing scopes while calculating(variables, functions, operators)
+    :param expression: expression to calculate
+    :param var_map: map from variable name to its Variable dataclass
+    :param func_map: map from defined function name to its Function type dataclass
+    :param op_map: map from defined operator to its Operator type dataclass
+    :param outer_names_buffer: list of names, calculations for which were called recursively(variables, functions)
     """
 
     def __init__(self, expression: str, var_map = None, func_map = None, op_map = None, outer_names_buffer = None):
@@ -290,7 +293,7 @@ class Calculator:
     def tokenize(self, compiled_expression: CompiledValidExpression) -> list[str]:
         """
         Tokenizes the expression
-        :param compiled_expression -- raw mathematical expression needed to be tokenized(after compilation)
+        :param compiled_expression: raw mathematical expression needed to be tokenized(after compilation and scope defining)
         :return: list of tokens
         """
 
@@ -326,7 +329,13 @@ class Calculator:
         for expr_ind in range(len(expression)):
             s = expression[expr_ind]
             if len(tokens)>=2:
-                if tokens[-2] in self.outer_names_buffer:
+                rec_error = False
+                if tokens[-2] not in self.op_map.keys():
+                    rec_error = tokens[-2] in self.outer_names_buffer
+                elif len(self.outer_names_buffer):
+                    rec_error = tokens[-2] == self.outer_names_buffer[-1]
+
+                if rec_error:
                     raise RecursionError(f"Name '{tokens[-2]}' defined with itself({expression}). Recursion is not (yet) supported")
                 if len(tokens)>2:
                     if tokens[-2].isspace() and check_is_digit(tokens[-1])==check_is_digit(tokens[-3]):
@@ -341,6 +350,7 @@ class Calculator:
 
             def filter_func(x: str):
                 return x.startswith(tokens[-1]) or x.startswith(s)
+
             multi_symbols = list(filter(filter_func, self.op_map.keys()))
             multi_symbols += list(filter(filter_func, self.func_map.keys()))
             if self.var_map:
@@ -398,7 +408,6 @@ class Calculator:
                     else:
                         place_token("-")  # else it is a substraction
                 elif s == "+":
-                    # tokens.append("+")
                     for i in range(1, len(tokens)+1):
                         if tokens[-i] != "":
                             res = tokens[-i]
@@ -471,8 +480,10 @@ class Calculator:
                                 f"TypeError: {func_name} requires maximum of {max_func_args} arguments but at least {cur_func[1]} were given")
 
         self.logger.debug(f"{tokens=}")
-        if tokens[-1] in self.outer_names_buffer:
-            raise RecursionError(f"Name '{tokens[-1]}' defined with itself({expression}). Recursion is not (yet) supported")
+        for ind in range(1, 3):
+            t = tokens[-ind]
+            if t in self.outer_names_buffer:
+                raise RecursionError(f"Name '{t}' defined with itself({expression}). Recursion is not (yet) supported")
         for t in tokens[::-1]:
             if t in self.op_map.keys() and t not in "+-":
                 raise InvalidTokenError(f"Unfinished line: operation '{t}' has no second operand",
