@@ -252,6 +252,8 @@ class Calculator:
                             self.outer_names_buffer.append(t)
                         cls = Calculator(self.var_map[t].value, self.var_map, func_map, self.op_map, self.outer_names_buffer)
                         result = cls.calc()
+                        if not var.local:
+                            self.outer_names_buffer.pop()
                         to_app = decimal.Decimal(result)
                         if check_is_integer(to_app):
                             to_app = int(to_app)  # type: ignore
