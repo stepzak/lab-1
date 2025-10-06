@@ -1,8 +1,9 @@
+import inspect
 from typing import Any, Literal
 import vars
 from constants import NAME_FORBIDDEN_SYMBOLS, SYSTEM_NAMES
 from extra.exceptions import InvalidTokenError, VariableOvershadowError
-from extra.types import Variable, Function, Operator
+from extra.types import Variable, Function, Operator, Module
 from extra.utils import CallAllMethods
 
 
@@ -83,7 +84,7 @@ def parse_function(func_expression: str) -> tuple[str, list[tuple[str, str | Non
 
 
 def check_valid_name(name: str, typeof: Literal["operator", "function", "variable", "argument"],
-                     var_map: dict[str, Variable], func_map: dict[str, Function], op_map: dict[str, Operator]):
+                     var_map: dict[str, Variable], func_map: dict[str, Function], op_map: dict[str, Operator], module_map: dict[str, Module],):
     """
     Checks validity of name
     :param name: name
@@ -103,7 +104,7 @@ def check_valid_name(name: str, typeof: Literal["operator", "function", "variabl
     }
 
     cfg = checks_config[typeof]
-    cfg.extend([(vars.FUNCTIONS_CALLABLE_ENUM, "function"), (vars.OPERATORS, "operator")])
+    cfg.extend([(vars.FUNCTIONS_CALLABLE_ENUM, "function"), (vars.OPERATORS, "operator"), (module_map, "module")])
 
     try:
         float(name[0])
@@ -167,6 +168,11 @@ def parse_operator(operator_expression: str):  # operator '->': 1, l+r*4-1,false
                 raise InvalidTokenError("Operator sign cannot contain whitespaces", exc_type="forbidden_symbol")
     return None
 
+def parse_import(import_expression: str):
+    shift = len("import ")
+    sliced = import_expression[shift:].strip()
+    return sliced.strip()
+
 
 class CompiledExpression(CallAllMethods):
     """
@@ -180,11 +186,12 @@ class CompiledExpression(CallAllMethods):
     :raises VariableOvershadowError: one name overshadows default ones or multiple definition types with the same names(e.g. 'let f = 5; def f(x): return x')
     """
 
-    def __init__(self, expression: str, var_map=None, func_map=None, op_map=None):
+    def __init__(self, expression: str, var_map=None, func_map=None, op_map=None, modules = None):
         self.expression = expression
         self.var_map = var_map or {}
         self.func_map = func_map or {}
         self.op_map = op_map or {}
+        self.modules = modules or {}
         self.expression = self.expression.replace(",)", ")")
         self.call_all_methods()
 
@@ -197,9 +204,9 @@ class CompiledExpression(CallAllMethods):
             return
         for var in splitted[:-1]:
             var = var.lstrip()
-            if var.count(" let ") + var.count(" def ") + var.count(" operator ") > 0:
+            if var.count(" let ") + var.count(" def ") + var.count(" operator ") + var.count(" import ") > 0:
                 raise SyntaxError(
-                    f"Unseparated variable(or function/operator) and variable(or function/operator) defines: {var}")
+                    f"Unseparated variable(or function/operator/import) and variable(or function/operator/import) defines: {var}")
 
             if var.startswith("let"):
 
@@ -221,23 +228,32 @@ class CompiledExpression(CallAllMethods):
                         raise InvalidTokenError(f"Variable name '{var_name}' cannot contain operators('{op}')",
                                                 exc_type="forbidden_symbol")
 
-                check_valid_name(var_name, "variable", self.var_map, self.func_map, self.op_map)
+                check_valid_name(var_name, "variable", self.var_map, self.func_map, self.op_map, self.modules)
                 self.var_map[var_name] = Variable(var_val, False)
 
             elif var.startswith("def"):
                 name, args, expr, min_args, max_args = parse_function(var)
-                check_valid_name(name, "function", self.var_map, self.func_map, self.op_map)
+                check_valid_name(name, "function", self.var_map, self.func_map, self.op_map, self.modules)
                 for arg in args:
                     try:
-                        check_valid_name(arg[0], "argument", self.var_map, self.func_map, self.op_map)
+                        check_valid_name(arg[0], "argument", self.var_map, self.func_map, self.op_map, self.modules)
                     except VariableOvershadowError as e:
                         raise VariableOvershadowError(f"Error defining with '{var}': " + str(e))
                 self.func_map[name] = (args, expr, min_args, max_args)
 
             elif var.startswith("operator"):
                 name, priority, op_expr, right_assoc = parse_operator(var)
-                check_valid_name(name, "operator", self.var_map, self.func_map, self.op_map)
+                check_valid_name(name, "operator", self.var_map, self.func_map, self.op_map, self.modules)
                 self.op_map[name] = (priority, op_expr, right_assoc)
+
+            elif var.startswith("import"):
+                module_name = parse_import(var)
+                self.modules[module_name] = Module(module_name, __import__(module_name), [])
+                for name, obj in inspect.getmembers(self.modules[module_name].module):
+                    if inspect.isbuiltin(obj) or inspect.isfunction(obj):
+                        self.modules[module_name].functions.append(name)
+
+
 
         self.expression = splitted[-1]
 

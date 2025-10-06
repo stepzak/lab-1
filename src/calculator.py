@@ -7,7 +7,7 @@ from typing import Union, Any
 
 from compiler import CompiledExpression
 from extra.exceptions import InvalidParenthesisError, InvalidTokenError
-from extra.types import Function, Operator, Variable
+from extra.types import Function, Operator, Variable, Module
 from extra.utils import check_is_integer, log_exception, get_next_token, get_previous_token
 from validator import CompiledValidExpression, PreCompiledValidExpression
 from vars import FUNCTIONS_CALLABLE_ENUM, OPERATORS, custom_log10
@@ -67,13 +67,14 @@ class Calculator:
     :param outer_names_buffer: list of names, calculations for which were called recursively(variables, functions)
     """
 
-    def __init__(self, expression: str, var_map = None, func_map = None, op_map = None, outer_names_buffer = None):
+    def __init__(self, expression: str, var_map = None, func_map = None, op_map = None, outer_names_buffer = None, modules = None):
         self.expression = expression
         self.var_map: dict[str, Variable] = var_map or {}
         self.func_map: dict[str, Function] = FUNCTIONS_CALLABLE_ENUM.copy()
         self.func_map.update(func_map or {})
         self.op_map: dict[str, Operator] = OPERATORS.copy()
         self.op_map.update(op_map or {})
+        self.modules: dict[str, Module] = modules or {}
         self.tokens = ['  ']
         self.logger = logging.getLogger(__name__)
         self.outer_names_buffer = outer_names_buffer or []
@@ -96,6 +97,7 @@ class Calculator:
             if not isinstance(v, Function):
                 obj = CustomFunctionExecutor(k, v[0], v[1])  #type: ignore
                 self.func_map[k] = Function(obj.execute_function, [], v[2], v[3])
+        self.modules.update(expression.modules)
         args = [('l', None), ('r', None)]
         for k, v in expression.op_map.items():
             if isinstance(v, Operator):
@@ -222,13 +224,13 @@ class Calculator:
                         try:
                             res = func(args[0], var_map=self.var_map, func_map=func_map, op_map=self.op_map, outer_names  = self.outer_names_buffer)
                         except TypeError:
-                            res = func(args[0])
+                            res = decimal.Decimal(func(args[0]))
                     else:
                         self.logger.debug(f"Calling function {last_func[0]}({args})")
                         try:
                             res = func(*args, var_map=self.var_map, func_map=func_map, op_map=self.op_map, outer_names = self.outer_names_buffer)
                         except TypeError:
-                            res = func(*args)
+                            res = decimal.Decimal(func(*args))
                     stack_functions.pop()
                     if len(stack_functions):
                         stack_functions[-1][1].append(str(res))
@@ -310,7 +312,7 @@ class Calculator:
             """
             tokens.append(token)
 
-        digitable = list(self.func_map.keys()) + list(string.digits) + list(self.var_map.keys()) + [".", "e"]
+        digitable = list(self.func_map.keys()) + list(string.digits) + list(self.var_map.keys()) + [".", "e"] + list(self.modules.keys())
 
         def check_is_digit(x: str) -> bool:
             if x in digitable or x.isnumeric():
@@ -362,7 +364,10 @@ class Calculator:
             if self.var_map:
                 multi_symbols += list(filter(filter_func, self.var_map.keys()))
 
-            extra_check_for_unary = True and len(tokens)>1
+            if self.modules:
+                multi_symbols += list(filter(filter_func, self.modules.keys()))
+
+            extra_check_for_unary = True and len(tokens)>1 and tokens[-1].find(".") == -1
             if s in "+-" and len(tokens)>1:
                 try:
                     extra_check_for_unary = not check_is_digit(get_next_token(expression, expr_ind))
@@ -376,16 +381,31 @@ class Calculator:
             elif any(s in ms and s for ms in multi_symbols) and len(multi_symbols) and extra_check_for_unary:
                     place_token(s)
             else:
-                if tokens[-1] in self.func_map.keys():
-                    current_functions.append(([tokens[-1]], [0], [0]))
-
-                elif tokens[-1] not in known_tokens and not check_is_digit(tokens[-1]):
-                    raise InvalidTokenError(f"Unknown token: '{tokens[-1]}'", exc_type="unknown_token")
                 if tokens[-1] in digitable:
                     for func in current_functions:
                         if func[1][0] == 0:
                             func[1][0] += 1
-                if s.isdigit() or s in (".", "e"):  # if current symbol is digit
+                if tokens[-1] in self.modules.keys():
+                    if s == ".":
+                        tokens[-1]+="."
+                elif tokens[-1].split(".")[0] in self.modules.keys():
+                    module, func = tokens[-1].split(".")[0], tokens[-1].split(".")[1] # type: ignore
+                    m = self.modules[module]
+                    if any([x.startswith(func+s) for x in m.functions]) or func == '':
+                        tokens[-1]+=s
+                    elif func in m.functions:
+                        self.func_map[tokens[-1]] = Function(getattr(m.module, func), [], -1, -1) #type: ignore
+                        current_functions.append(([tokens[-1]], [0], [0]))
+                        tokens.append("(")
+                    else:
+                        raise ModuleNotFoundError(f"Module {module} does not contain function '{func}'")
+
+                elif tokens[-1] in self.func_map.keys():
+                    current_functions.append(([tokens[-1]], [0], [0]))
+
+                elif tokens[-1] not in known_tokens and not check_is_digit(tokens[-1]):
+                    raise InvalidTokenError(f"Unknown token: '{tokens[-1]}'", exc_type="unknown_token")
+                elif s.isdigit() or s in (".", "e"):  # if current symbol is digit
                     if not check_is_digit(tokens[-1]):  # if previous one was not a digit we append the symbol as the first digit of a number
                         place_token(s)
                         if check_is_digit(tokens[-1]) and check_is_digit(tokens[-2]):
@@ -446,8 +466,10 @@ class Calculator:
                     if s == "(":
                         if "[" not in cur_func[0][0]:
                             cur_func[0][0] += "["
-
-                            tokens[-1] = "["
+                            if tokens[-1] == "(":
+                                tokens[-1] = "["
+                            else:
+                                tokens.append("[")
                         else:
                             current_functions[-1][2][0] += 1
                         continue

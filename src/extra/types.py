@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Any
 
 
 @dataclass
@@ -42,3 +42,10 @@ class Variable:
     """
     value: str
     local: bool = False
+
+
+@dataclass
+class Module:
+    name: str
+    module: Any
+    functions: list
