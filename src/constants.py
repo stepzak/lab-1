@@ -13,5 +13,5 @@ MAXIMUM_DIGITS = 1_000_000
 MAXIMUM_DIGITS_WARNING = 700_000
 
 FORBIDDEN_SYMBOLS = set("[]")
-NAME_FORBIDDEN_SYMBOLS = set(" (),")
+NAME_FORBIDDEN_SYMBOLS = set(" (),:")
 SYSTEM_NAMES = {"return", "operator", "def", "let"}

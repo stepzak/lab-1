@@ -20,7 +20,7 @@ def round_decimal(dec: decimal.Decimal, n_digits: int = cst.ROUNDING_DIGITS, rou
         return dec
 
 def get_previous_token(tokens: list[str], index: int) -> str:
-    tks = tokens[:index:]
+    tks = tokens[:index+1:]
     for token in tks[::-1]:
         if token.isspace():
             continue

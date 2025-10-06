@@ -2,7 +2,7 @@ import decimal
 import logging
 import string
 import sys
-from math import log10, floor
+from math import floor
 from typing import Union, Any
 
 from compiler import CompiledExpression
@@ -10,7 +10,7 @@ from extra.exceptions import InvalidParenthesisError, InvalidTokenError
 from extra.types import Function, Operator, Variable
 from extra.utils import check_is_integer, log_exception, get_next_token, get_previous_token
 from validator import CompiledValidExpression, PreCompiledValidExpression
-from vars import FUNCTIONS_CALLABLE_ENUM, OPERATORS
+from vars import FUNCTIONS_CALLABLE_ENUM, OPERATORS, custom_log10
 import constants as cst
 from decimal import getcontext
 
@@ -86,7 +86,7 @@ class Calculator:
         Calculates value of the expression
         :return: value of expression. Value can be returned as None if an error occurred during calculation process
         """
-
+        self.expression = str(self.expression)
         pre_compiled = PreCompiledValidExpression(' '.join(self.expression.split()))
         expression = CompiledExpression(pre_compiled.expression, self.var_map, self.func_map, self.op_map)
 
@@ -147,19 +147,19 @@ class Calculator:
                 validator(a, b, op=operator)
             try:
                 if a != 0 and b != 0:
-                    abs_a, abs_b = float(abs(a)), float(abs(b))  # type: ignore
+                    abs_a, abs_b = abs(a), abs(b)  # type: ignore
                     if operator == "**":
-                        n_digits = float(b * decimal.Decimal(log10(abs_a)))
+                        n_digits: decimal.Decimal = b * custom_log10(abs_a)
                     elif operator == "*":
-                        n_digits = log10(abs_b) + log10(abs_b)
+                        n_digits = custom_log10(abs_a) + custom_log10(abs_b)
                     elif operator in ["/", "//"]:
-                        n_digits = log10(abs_a) - log10(abs_b)
+                        n_digits = custom_log10(abs_a) + custom_log10(abs_b)
 
                     elif operator == "+":
-                        n_digits = max(log10(abs_a), log10(abs_b))
+                        n_digits = max(custom_log10(abs_a), custom_log10(abs_b))
                     else:
-                        n_digits = -1
-                    n_digits = floor(n_digits) + 1
+                        n_digits = decimal.Decimal(-1)
+                    n_digits = floor(n_digits) + 1 #type: ignore
 
                     if n_digits > cst.MAXIMUM_DIGITS:
                         raise ValueError(
@@ -395,13 +395,13 @@ class Calculator:
                                 else:
                                     break
 
-                            raise SyntaxError(f"Two numbers without an operator: {tokens[-2]} {tokens[-1]}")
+                            raise SyntaxError(f"Two numbers without an operator: '{tokens[-2]}' '{tokens[-1]}'")
                     else:
                         tokens[-1] += s  # if the previous one was a digit, we concatenate current token with symbol
 
                     continue  # continues the loop(to eliminate extra checks)
                 elif s == "-":
-                    res = get_previous_token(expression, expr_ind)
+                    res = get_previous_token(tokens, expr_ind)
                     if not check_is_digit(res):  # context management: if previous one was not a digit, it is a unary "-"
                         tokens.extend(("-1", "*"))
                         if res not in "()[] " and not res.isspace():
@@ -409,10 +409,10 @@ class Calculator:
                     else:
                         place_token("-")  # else it is a substraction
                 elif s == "+":
-                    res = get_previous_token(expression, expr_ind)
+                    res = get_previous_token(tokens, expr_ind)
                     if not check_is_digit(res) and res not in "()[]" and not res.isspace():
                         self.logger.warning(f"Two operations({res}+), '+' is unary: one after other detected")
-                    elif check_is_digit(res) and res in "()[]":
+                    elif check_is_digit(res) and res not in "()[]":
                         tokens.append("+")
                     continue
 
@@ -425,7 +425,7 @@ class Calculator:
                             raise SyntaxError(f"Two operations one after other: {tokens[-i]}{s}")
                     place_token(s)
                 elif s == ")":
-                    for i in range(1, len(tokens) - 1):
+                    for i in range(1, len(tokens)):
                         if check_is_digit(tokens[-i]):
                             break
                         elif tokens[-i] in self.op_map.keys():
@@ -477,17 +477,18 @@ class Calculator:
 
         self.logger.debug(f"{tokens=}")
 
+        if self.outer_names_buffer:
+            for ind in range(1, max(len(tokens), 3)):
+                t = tokens[-ind]
+                if t in self.outer_names_buffer:
+                    raise RecursionError(f"Name '{t}' defined with itself({expression}). Recursion is not (yet) supported")
 
         if len(tokens)>=3:
 
             if tokens[-2] == " ":
                 if check_is_digit(tokens[-1]) and check_is_digit(tokens[-3]):
-                    raise SyntaxError(f"Two numbers without an operator: {tokens[-2]} {tokens[-1]}")
+                    raise SyntaxError(f"Two numbers without an operator: '{tokens[-3]}' {tokens[-1]}")
 
-            for ind in range(1, 3):
-                t = tokens[-ind]
-                if t in self.outer_names_buffer:
-                    raise RecursionError(f"Name '{t}' defined with itself({expression}). Recursion is not (yet) supported")
             for t in tokens[::-1]:
                 if t in self.op_map.keys() and t not in "+-":
                     raise InvalidTokenError(f"Unfinished line: operation '{t}' has no second operand",

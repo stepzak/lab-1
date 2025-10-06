@@ -49,6 +49,10 @@ def custom_sqrt(x: decimal.Decimal | int) -> decimal.Decimal | int:
         return int(ret)
     return ret
 
+def custom_log10(x: decimal.Decimal):
+    x = decimal.Decimal(x)
+    return x.log10()
+
 OPERATORS: dict[str, Operator] = {
         "+": Operator(0, lambda x, y: x + y,  False, []),
         "-": Operator(0, lambda x, y: x - y, False, []),
