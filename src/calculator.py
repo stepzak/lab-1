@@ -8,7 +8,7 @@ from typing import Union, Any
 from compiler import CompiledExpression
 from extra.exceptions import InvalidParenthesisError, InvalidTokenError
 from extra.types import Function, Operator, Variable
-from extra.utils import check_is_integer, log_exception
+from extra.utils import check_is_integer, log_exception, get_next_token, get_previous_token
 from validator import CompiledValidExpression, PreCompiledValidExpression
 from vars import FUNCTIONS_CALLABLE_ENUM, OPERATORS
 import constants as cst
@@ -87,7 +87,7 @@ class Calculator:
         :return: value of expression. Value can be returned as None if an error occurred during calculation process
         """
 
-        pre_compiled = PreCompiledValidExpression(self.expression)
+        pre_compiled = PreCompiledValidExpression(' '.join(self.expression.split()))
         expression = CompiledExpression(pre_compiled.expression, self.var_map, self.func_map, self.op_map)
 
         if not self.var_map:
@@ -169,12 +169,13 @@ class Calculator:
                         self.logger.warning(
                             f"Operation {a} ** {b} will lead to at least {n_digits}(warning set on {cst.MAXIMUM_DIGITS_WARNING})")
 
-                to_app = op_to_run.callable_function(a, b)
+                to_app = decimal.Decimal(op_to_run.callable_function(a, b))
                 if check_is_integer(to_app):
                     to_app = int(to_app)  # type: ignore
                 output.append(to_app)
             except TypeError:
                 to_app = op_to_run.callable_function(a, b, var_map=self.var_map, func_map=func_map, op_map=self.op_map, outer_names = self.outer_names_buffer)
+                to_app = decimal.Decimal(to_app)
                 if check_is_integer(to_app):
                     to_app = int(to_app)  # type: ignore
                 output.append(to_app)
@@ -309,7 +310,7 @@ class Calculator:
             """
             tokens.append(token)
 
-        digitable = list(self.func_map.keys()) + list(string.digits) + list(self.var_map.keys())
+        digitable = list(self.func_map.keys()) + list(string.digits) + list(self.var_map.keys()) + [".", "e"]
 
         def check_is_digit(x: str) -> bool:
             if x in digitable or x.isnumeric():
@@ -347,7 +348,8 @@ class Calculator:
                             if len(expression)-1<expr_ind:
                                 break
                             s = expression[expr_ind]
-                        raise SyntaxError(f"Missed operation between {tokens[-3]} and {tokens[-1]}")
+                        if check_is_digit(tokens[-3]) and check_is_digit(tokens[-1]):
+                            raise SyntaxError(f"Missed operation between {tokens[-3]} and {tokens[-1]}")
             if s == " " and not tokens[-1].isspace():
                 tokens.append(" ")
                 continue
@@ -363,7 +365,7 @@ class Calculator:
             extra_check_for_unary = True and len(tokens)>1
             if s in "+-" and len(tokens)>1:
                 try:
-                    extra_check_for_unary = not check_is_digit(expression[expr_ind + 1])
+                    extra_check_for_unary = not check_is_digit(get_next_token(expression, expr_ind))
                 except IndexError:
                     raise InvalidTokenError(f"Unfinished line: operation '{s}' has no second operand",
                                             exc_type="invalid_token")
@@ -399,12 +401,7 @@ class Calculator:
 
                     continue  # continues the loop(to eliminate extra checks)
                 elif s == "-":
-                    for i in range(1, len(tokens)+1):
-                        if tokens[-i] != "" and tokens[-i] != ' ':
-                            res = tokens[-i]
-                            break
-                    else:
-                        res = tokens[-1]
+                    res = get_previous_token(expression, expr_ind)
                     if not check_is_digit(res):  # context management: if previous one was not a digit, it is a unary "-"
                         tokens.extend(("-1", "*"))
                         if res not in "()[] " and not res.isspace():
@@ -412,15 +409,10 @@ class Calculator:
                     else:
                         place_token("-")  # else it is a substraction
                 elif s == "+":
-                    for i in range(1, len(tokens)+1):
-                        if not tokens[-i].isspace():
-                            res = tokens[-i]
-                            break
-                    else:
-                        res = tokens[-1]
+                    res = get_previous_token(expression, expr_ind)
                     if not check_is_digit(res) and res not in "()[]" and not res.isspace():
                         self.logger.warning(f"Two operations({res}+), '+' is unary: one after other detected")
-                    elif check_is_digit(res) or res in "()[]":
+                    elif check_is_digit(res) and res in "()[]":
                         tokens.append("+")
                     continue
 
@@ -484,22 +476,30 @@ class Calculator:
                                 f"TypeError: {func_name} requires maximum of {max_func_args} arguments but at least {cur_func[1]} were given")
 
         self.logger.debug(f"{tokens=}")
-        for ind in range(1, 3):
-            t = tokens[-ind]
-            if t in self.outer_names_buffer:
-                raise RecursionError(f"Name '{t}' defined with itself({expression}). Recursion is not (yet) supported")
-        for t in tokens[::-1]:
-            if t in self.op_map.keys() and t not in "+-":
-                raise InvalidTokenError(f"Unfinished line: operation '{t}' has no second operand",
-                                        exc_type="invalid_token")
-            elif check_is_digit(t):
-                break
 
-        for t in tokens:
-            if t in self.op_map.keys() and t not in "+-":
-                raise InvalidTokenError(f"Unfinished line: operation '{t}' has no first operand",
-                                        exc_type="invalid_token")
-            elif check_is_digit(t):
-                break
+
+        if len(tokens)>=3:
+
+            if tokens[-2] == " ":
+                if check_is_digit(tokens[-1]) and check_is_digit(tokens[-3]):
+                    raise SyntaxError(f"Two numbers without an operator: {tokens[-2]} {tokens[-1]}")
+
+            for ind in range(1, 3):
+                t = tokens[-ind]
+                if t in self.outer_names_buffer:
+                    raise RecursionError(f"Name '{t}' defined with itself({expression}). Recursion is not (yet) supported")
+            for t in tokens[::-1]:
+                if t in self.op_map.keys() and t not in "+-":
+                    raise InvalidTokenError(f"Unfinished line: operation '{t}' has no second operand",
+                                            exc_type="invalid_token")
+                elif check_is_digit(t):
+                    break
+
+            for t in tokens:
+                if t in self.op_map.keys() and t not in "+-":
+                    raise InvalidTokenError(f"Unfinished line: operation '{t}' has no first operand",
+                                            exc_type="invalid_token")
+                elif check_is_digit(t):
+                    break
 
         return tokens

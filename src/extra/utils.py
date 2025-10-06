@@ -19,6 +19,23 @@ def round_decimal(dec: decimal.Decimal, n_digits: int = cst.ROUNDING_DIGITS, rou
     except decimal.InvalidOperation:
         return dec
 
+def get_previous_token(tokens: list[str], index: int) -> str:
+    tks = tokens[:index:]
+    for token in tks[::-1]:
+        if token.isspace():
+            continue
+
+        return token
+    return tokens[0]
+
+def get_next_token(tokens: list[str], index: int) -> str:
+    for token in tokens[index+1:]:
+        if token.isspace():
+            continue
+        return token
+    return tokens[-1]
+
+
 def log_exception(func):
 
     """Decorator to automatically log exceptions"""

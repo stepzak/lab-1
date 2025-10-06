@@ -1,4 +1,6 @@
 import decimal
+import math
+
 from extra.types import Operator, Function
 from extra.utils import check_is_integer
 
@@ -9,6 +11,8 @@ def pow_validator(*args, **kwargs):
                 integer_validator(args, op = "pow")
             except TypeError:
                 raise TypeError("pow() 3rd argument not allowed unless all arguments are integers")
+    if args[0] == args[1] == 0:
+        raise TypeError("'0**0' is undefined")
 
 def integer_validator(*args, **kwargs):
     """
@@ -52,7 +56,7 @@ OPERATORS: dict[str, Operator] = {
         "/": Operator(1, lambda x, y: x / y, False, []),
         "//": Operator(1, lambda x, y: x // y, False, [integer_validator]),
         "%": Operator(1, lambda x, y: x % y, False, [integer_validator]),
-        "**": Operator(2, lambda x, y: x ** y, True, []),
+        "**": Operator(2, lambda x, y: x ** y, True, [pow_validator]),
         "==": Operator(-3, lambda x, y: int(x == y), False, []),
         "!=": Operator(-3, lambda x, y: int(x != y), False, []),
         "<": Operator(-3, lambda x, y: int(x < y), False, []),
@@ -70,5 +74,6 @@ FUNCTIONS_CALLABLE_ENUM: dict[str,Function] = {
         "min": Function(min, [], 1, -1),
         "abs": Function(abs, [], 1, 1),
         "pow": Function(pow, [pow_validator], 2, 3),
-        "sqrt": Function(custom_sqrt, [non_negative_validator], 1, 1)
+        "sqrt": Function(custom_sqrt, [non_negative_validator], 1, 1),
+        "sin": Function(lambda x: decimal.Decimal(math.sin(x)), [], 1, 1)
     }
