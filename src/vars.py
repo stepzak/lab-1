@@ -60,7 +60,7 @@ OPERATORS: dict[str, Operator] = {
         "/": Operator(1, lambda x, y: x / y, False, []),
         "//": Operator(1, lambda x, y: x // y, False, [integer_validator]),
         "%": Operator(1, lambda x, y: x % y, False, [integer_validator]),
-        "**": Operator(2, lambda x, y: x ** y, True, [pow_validator]),
+        "**": Operator(2, lambda x, y: pow(x, y), True, [pow_validator]),
         "==": Operator(-3, lambda x, y: int(x == y), False, []),
         "!=": Operator(-3, lambda x, y: int(x != y), False, []),
         "<": Operator(-3, lambda x, y: int(x < y), False, []),

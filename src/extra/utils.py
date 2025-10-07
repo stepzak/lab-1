@@ -61,5 +61,5 @@ class CallAllMethods:
             instance = self
         for method in dir(instance):
             attr = getattr(instance, method)
-            if not method.startswith("__") and callable(attr) and method!="call_all_methods":
+            if not method.startswith("__") and callable(attr) and method!="call_all_methods" and method.find("__") == -1:
                 attr()

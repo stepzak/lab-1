@@ -2,7 +2,7 @@ from typing import Any, Literal
 import vars
 from constants import NAME_FORBIDDEN_SYMBOLS, SYSTEM_NAMES
 from extra.exceptions import InvalidTokenError, VariableOvershadowError
-from extra.types import Variable, Function, Operator
+from extra.types import Variable, Context, FunctionPlaceholder, OperatorPlaceholder
 from extra.utils import CallAllMethods
 
 
@@ -81,49 +81,6 @@ def parse_function(func_expression: str) -> tuple[str, list[tuple[str, str | Non
                         exc_type="forbidden_symbol")
     return None
 
-
-def check_valid_name(name: str, typeof: Literal["operator", "function", "variable", "argument"],
-                     var_map: dict[str, Variable], func_map: dict[str, Function], op_map: dict[str, Operator]):
-    """
-    Checks validity of name
-    :param name: name
-    :param typeof: type of the name(operator, function, variable, argument)
-    :param var_map: map from variable name to its Variable dataclass
-    :param func_map: map from function name to its Function dataclass
-    :param op_map: map from operator name to its Operator dataclass
-    :raises VariableOvershadowError: name overshadows default, system or other type
-    :raises InvalidTokenError: invalid token in name
-    :return: None
-    """
-    checks_config = {
-        "operator": [(var_map, "variable"), (func_map, "function")],
-        "function": [(var_map, "variable"), (op_map, "operator"), ],
-        "variable": [(op_map, "operator"), (func_map, "function")],
-        "argument": [(op_map, "operator"), (func_map, "function")],
-    }
-
-    cfg = checks_config[typeof]
-    cfg.extend([(vars.FUNCTIONS_CALLABLE_ENUM, "function"), (vars.OPERATORS, "operator")])
-
-    try:
-        float(name[0])
-        raise VariableOvershadowError(f"{typeof} '{name}' overshadows a number")
-    except ValueError:
-        pass
-
-    intersection_set = set(name) & NAME_FORBIDDEN_SYMBOLS
-    if name in SYSTEM_NAMES:
-        raise VariableOvershadowError(f"{typeof} '{name}' is forbidden: it is a system name")
-    if intersection_set:
-        raise InvalidTokenError(f"{typeof} '{name}': symbols {intersection_set} are forbidden in naming",
-                                exc_type="forbidden_symbol")
-
-    for check in cfg:
-        if name in check[0].keys(): #type: ignore
-            raise VariableOvershadowError(
-                f"{typeof} '{name}' overshadows {(typeof == check[1]) * 'default '}{check[1]} '{name}'")
-
-
 def parse_operator(operator_expression: str):  # operator '->': 1, l+r*4-1,false;  2 -> 3 = 2+3*4-1 = 13
     """
     Converts operator expression to (sign, priority, function, is_right_associative)
@@ -172,21 +129,57 @@ class CompiledExpression(CallAllMethods):
     """
     Class that contains expression with its names scope
     :param expression: mathematical expression
-    :param var_map: map from var name to its Variable dataclass
-    :param func_map: map from function name to its Function dataclass
-    :param op_map: map from operator name to its Operator dataclass
+    :param context: Context
     :raises SyntaxError: Invalid syntax for defining
     :raises ValueError: non-default args after default ones in function defining
     :raises VariableOvershadowError: one name overshadows default ones or multiple definition types with the same names(e.g. 'let f = 5; def f(x): return x')
     """
 
-    def __init__(self, expression: str, var_map=None, func_map=None, op_map=None):
+    def __init__(self, expression: str, context: Context = Context()):
         self.expression = expression
-        self.var_map = var_map or {}
-        self.func_map = func_map or {}
-        self.op_map = op_map or {}
         self.expression = self.expression.replace(",)", ")")
+        self.ctx = context
         self.call_all_methods()
+
+    def __check_valid_name(self, name: str, typeof: Literal["operator", "function", "variable", "argument"]):
+        """
+        Checks validity of name
+        :param name: name
+        :param typeof: type of the name(operator, function, variable, argument)
+        :ctx: Context
+        :raises VariableOvershadowError: name overshadows default, system or other type
+        :raises InvalidTokenError: invalid token in name
+        :return: None
+        """
+        ctx = self.ctx
+        checks_config = {
+            "operator": [(ctx.variables, "variable"), (ctx.functions, "function")],
+            "function": [(ctx.variables, "variable"), (ctx.operators, "operator"), ],
+            "variable": [(ctx.operators, "operator"), (ctx.functions, "function")],
+            "argument": [(ctx.operators, "operator"), (ctx.functions, "function")],
+        }
+
+        cfg = checks_config[typeof]
+        cfg.extend([(vars.FUNCTIONS_CALLABLE_ENUM, "function"), (vars.OPERATORS, "operator")])
+
+        try:
+            float(name[0])
+            raise VariableOvershadowError(f"{typeof} '{name}' overshadows a number")
+        except ValueError:
+            pass
+
+        intersection_set = set(name) & NAME_FORBIDDEN_SYMBOLS
+        if name in SYSTEM_NAMES:
+            raise VariableOvershadowError(f"{typeof} '{name}' is forbidden: it is a system name")
+        if intersection_set:
+            raise InvalidTokenError(f"{typeof} '{name}': symbols {intersection_set} are forbidden in naming",
+                                    exc_type="forbidden_symbol")
+
+        for check in cfg:
+            if name in check[0].keys(): #type: ignore
+                raise VariableOvershadowError(
+                    f"{typeof} '{name}' overshadows {(typeof == check[1]) * 'default '}{check[1]} '{name}'")
+
 
     def _compile_vars_and_functions(self):
         """
@@ -221,23 +214,23 @@ class CompiledExpression(CallAllMethods):
                         raise InvalidTokenError(f"Variable name '{var_name}' cannot contain operators('{op}')",
                                                 exc_type="forbidden_symbol")
 
-                check_valid_name(var_name, "variable", self.var_map, self.func_map, self.op_map)
-                self.var_map[var_name] = Variable(var_val, False)
+                self.__check_valid_name(var_name, "variable")
+                self.ctx.variables[var_name] = Variable(var_val, False)
 
             elif var.startswith("def"):
                 name, args, expr, min_args, max_args = parse_function(var)
-                check_valid_name(name, "function", self.var_map, self.func_map, self.op_map)
+                self.__check_valid_name(name, "function")
                 for arg in args:
                     try:
-                        check_valid_name(arg[0], "argument", self.var_map, self.func_map, self.op_map)
+                        self.__check_valid_name(arg[0], "argument")
                     except VariableOvershadowError as e:
                         raise VariableOvershadowError(f"Error defining with '{var}': " + str(e))
-                self.func_map[name] = (args, expr, min_args, max_args)
+                self.ctx.functions[name] = FunctionPlaceholder(expression=expr, indexed_args=args, min_args=min_args, max_args=max_args)
 
             elif var.startswith("operator"):
                 name, priority, op_expr, right_assoc = parse_operator(var)
-                check_valid_name(name, "operator", self.var_map, self.func_map, self.op_map)
-                self.op_map[name] = (priority, op_expr, right_assoc)
+                self.__check_valid_name(name, "operator")
+                self.ctx.operators[name] = OperatorPlaceholder(op_expr, priority, right_assoc)
 
         self.expression = splitted[-1]
 
@@ -246,12 +239,12 @@ class CompiledExpression(CallAllMethods):
         Checks if variables and functions names do not contain operators
         :raises InvalidTokenError: function or variable name contains operators
         """
-        for op in list(self.op_map.keys()) + list(vars.OPERATORS.keys()):
-            for func in self.func_map.keys():
+        for op in list(self.ctx.operators.keys()) + list(vars.OPERATORS.keys()):
+            for func in self.ctx.functions.keys():
                 if func.find(op) != -1:
                     raise InvalidTokenError(f"Function name '{func}' cannot contain operators('{op}')",
                                             exc_type="forbidden_symbol")
-            for var in self.var_map.keys():
+            for var in self.ctx.variables.keys():
                 if var.find(op) != -1:
                     raise InvalidTokenError(f"Variable name '{var}' cannot contain operators('{op}')'",
                                             exc_type="forbidden_symbol")

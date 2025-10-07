@@ -63,10 +63,11 @@ class CompiledValidExpression(CallAllMethods):
     """
     def __init__(self, expression: CompiledExpression):
         self.expression = expression.expression
-        self.AVAILABLE_SYMBOLS = ''.join(expression.var_map.keys())+''.join(vars.FUNCTIONS_CALLABLE_ENUM.keys())+''.join(vars.OPERATORS.keys())+"(),[]"+string.digits+"let;defreturn"
-        self.var_map = expression.var_map
-        self.func_map = expression.func_map
-        self.op_map = expression.op_map
+        self.var_map = expression.ctx.variables
+        self.func_map = expression.ctx.functions
+        self.op_map = expression.ctx.operators
+        self.AVAILABLE_SYMBOLS = ''.join(self.var_map.keys())+''.join(self.func_map.keys())+''.join(self.op_map.keys())+"(),[]"+string.digits+"let;defreturn"
+
         self.call_all_methods()
 
     def check_forbidden(self):

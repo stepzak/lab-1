@@ -16,8 +16,8 @@ def main():
         if expression == "q":
             exit(0)
         try:
-            calc = Calculator(expression)
-            result = calc.calc()
+            calc = Calculator()
+            result = calc.calc(expression=expression)
         except Exception:
             result = None
         try:
@@ -26,8 +26,8 @@ def main():
                 if check_is_integer(result):
                     result = int(result)
 
-                    if cst.SCIENTIFIC_FORM:
-                        result = ("{:."+str(cst.SCIENTIFIC_FORM)+"E}").format(decimal.Decimal(result))
+            if cst.SCIENTIFIC_FORM and result:
+                result = ("{:."+str(cst.SCIENTIFIC_FORM)+"e}").format(decimal.Decimal(result))
             logger.info(f"{expression} = {result}")
         except ValueError:
             logger.error(f"Could not calculate expression {expression}: too many digits")
