@@ -1,8 +1,9 @@
 from typing import Any, Literal
-import src.vars as vrs
+from src.vars import FUNCTIONS_CALLABLE_ENUM, OPERATORS
 from constants import NAME_FORBIDDEN_SYMBOLS, SYSTEM_NAMES
 from extra.exceptions import InvalidTokenError, VariableOvershadowError
-from extra.types import Variable, Context, FunctionPlaceholder, OperatorPlaceholder
+from extra.types import Variable, FunctionPlaceholder, OperatorPlaceholder
+from extra.context_type import Context
 from extra.utils import CallAllMethods
 
 
@@ -28,7 +29,7 @@ def parse_function(func_expression: str) -> tuple[str, list[tuple[str, str | Non
             name += s
 
         elif ")" not in name:
-            if s in vrs.OPERATORS.keys():
+            if s in OPERATORS.keys():
                 raise InvalidTokenError(f"Symbol '{s}' is forbidden for name", exc_type="forbidden_symbol")
             if s == ")":
                 name += ")"
@@ -135,10 +136,10 @@ class CompiledExpression(CallAllMethods):
     :raises VariableOvershadowError: one name overshadows default ones or multiple definition types with the same names(e.g. 'let f = 5; def f(x): return x')
     """
 
-    def __init__(self, expression: str, context: Context = Context()):
+    def __init__(self, expression: str, context: Context = None):
         self.expression = expression
         self.expression = self.expression.replace(",)", ")")
-        self.ctx = context
+        self.ctx = context or Context()
         self.call_all_methods()
 
     def __check_valid_name(self, name: str, typeof: Literal["operator", "function", "variable", "argument"]):
@@ -160,7 +161,7 @@ class CompiledExpression(CallAllMethods):
         }
 
         cfg = checks_config[typeof]
-        cfg.extend([(vrs.FUNCTIONS_CALLABLE_ENUM, "function"), (vrs.OPERATORS, "operator")])
+        cfg.extend([(FUNCTIONS_CALLABLE_ENUM, "function"), (OPERATORS, "operator")])
 
         try:
             float(name[0])
@@ -209,7 +210,7 @@ class CompiledExpression(CallAllMethods):
                 if len(var_val) == 0:
                     raise SyntaxError(f"{var}: variable cannot be empty")
 
-                for op in vrs.OPERATORS:
+                for op in OPERATORS:
                     if var_name.find(op) != -1:
                         raise InvalidTokenError(f"Variable name '{var_name}' cannot contain operators('{op}')",
                                                 exc_type="forbidden_symbol")
@@ -239,7 +240,7 @@ class CompiledExpression(CallAllMethods):
         Checks if variables and functions names do not contain operators
         :raises InvalidTokenError: function or variable name contains operators
         """
-        for op in list(self.ctx.operators.keys()) + list(vrs.OPERATORS.keys()):
+        for op in list(self.ctx.operators.keys()) + list(OPERATORS.keys()):
             for func in self.ctx.functions.keys():
                 if func.find(op) != -1:
                     raise InvalidTokenError(f"Function name '{func}' cannot contain operators('{op}')",

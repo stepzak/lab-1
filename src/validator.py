@@ -1,6 +1,6 @@
 import string
 import src.constants as cst
-import src.vars as vrs
+from src.vars import FUNCTIONS_CALLABLE_ENUM
 from src.compiler import CompiledExpression
 from src.extra.exceptions import InvalidParenthesisError, VariableOvershadowError, InvalidTokenError
 
@@ -46,8 +46,8 @@ class PreCompiledValidExpression(CallAllMethods):
         """
         expr_to_check = self.expression.replace(" =", "=").strip().replace(" (", "(")
         checks = ["let let=", "def let(", "def operator(", "let operator=", "def def(", "def return(", "let return=", "let def="]
-        checks += list([f"let {dfn}=" for dfn in vrs.FUNCTIONS_CALLABLE_ENUM.keys()])
-        checks += list([f"def {dfn}(" for dfn in vrs.FUNCTIONS_CALLABLE_ENUM.keys()])
+        checks += list([f"let {dfn}=" for dfn in FUNCTIONS_CALLABLE_ENUM.keys()])
+        checks += list([f"def {dfn}(" for dfn in FUNCTIONS_CALLABLE_ENUM.keys()])
         for check in checks:
 
             if check in expr_to_check:

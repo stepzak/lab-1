@@ -2,7 +2,8 @@ import string
 import logging
 
 import src.extra.exceptions as ex_exc
-from src.extra.types import Context
+from extra.utils import log_exception
+from src.extra.context_type import Context
 from src.extra.utils import get_next_token, get_previous_token
 from src.validator import CompiledValidExpression
 
@@ -12,7 +13,7 @@ class Tokenizer:
         self.ctx = ctx
         self.logger = logger or logging.getLogger(__name__)
 
-
+    @log_exception
     def tokenize(self, compiled_expression: CompiledValidExpression) -> list[str]:
         """
         Tokenizes the expression

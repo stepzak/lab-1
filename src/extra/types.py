@@ -1,6 +1,5 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable
-import vars
 
 
 @dataclass
@@ -57,17 +56,3 @@ class Variable:
     """
     value: str
     local: bool = False
-
-
-@dataclass
-class Context:
-    """
-    Class representing a context
-    :param variables: map from variable name to Variable dataclass
-    :param functions: map from function name to Function dataclass
-    :param operators: map from operator name to Operator dataclass
-    """
-    variables: dict[str, Variable] = field(default_factory=dict)
-    functions: dict[str, Function | FunctionPlaceholder] = field(default_factory = lambda: vars.FUNCTIONS_CALLABLE_ENUM)
-    operators: dict[str, Operator | OperatorPlaceholder] = field(default_factory= lambda: vars.OPERATORS)
-    outer_names_buffer: list[str] = field(default_factory=list)

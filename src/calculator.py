@@ -1,3 +1,4 @@
+import copy
 import decimal
 import logging
 import sys
@@ -6,7 +7,8 @@ from typing import Union, Any
 
 from src.compiler import CompiledExpression
 from src.extra.exceptions import InvalidTokenError
-from src.extra.types import Function, Operator, Variable, Context
+from src.extra.types import Function, Operator, Variable
+from src.extra.context_type import Context
 from src.extra.utils import check_is_integer, log_exception
 from src.tokenizer import Tokenizer
 from src.validator import CompiledValidExpression, PreCompiledValidExpression
@@ -36,6 +38,7 @@ class CustomFunctionExecutor:
         :param ctx: Context
         :return: function result
         """
+        ctx = copy.deepcopy(ctx)
         ctx.outer_names_buffer.append(self.name)
         for i in range(len(self.indexed_vars)):
             try:
@@ -57,8 +60,8 @@ class Calculator:
     :param ctx: Context
     """
 
-    def __init__(self, ctx: Context = Context()):
-        self.ctx = ctx
+    def __init__(self, ctx: Context | None = None):
+        self.ctx = ctx or Context()
         self.tokens = ['  ']
         self.logger = logging.getLogger(__name__)
         self.logger.debug(f"ctx: {self.ctx}")
@@ -79,12 +82,12 @@ class Calculator:
             if not self.ctx.variables:
                 self.ctx.variables = c_expression.ctx.variables
             for k, v in c_expression.ctx.functions.items():
-                if not isinstance(v, Function):
+                if not getattr(v, "callable_function", None):
                     obj = CustomFunctionExecutor(k, v.indexed_args, v.expression)  #type: ignore
                     self.ctx.functions[k] = Function(obj.execute_function, [], v.min_args, v.max_args)
             args = [('l', None), ('r', None)]
             for op_name, op_data in c_expression.ctx.operators.items():
-                if isinstance(op_data, Operator):
+                if getattr(op_data, "callable_function", None):
                     continue
 
                 obj = CustomFunctionExecutor(op_name, args, op_data.expression)  # type: ignore
@@ -108,7 +111,6 @@ class Calculator:
             return result
         return result
 
-    @log_exception
     def rpn_and_calc(self) -> decimal.Decimal | None | int:
         """
         Converts list of tokens to RPN and then calcs their value

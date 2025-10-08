@@ -2,7 +2,7 @@ import decimal
 
 import pytest
 
-from extra.exceptions import InvalidTokenError, InvalidParenthesisError
+from src.extra.exceptions import InvalidTokenError, InvalidParenthesisError
 from calculator import Calculator
 
 
@@ -26,7 +26,7 @@ from calculator import Calculator
     ]
 )
 def test_simple_ok(expression):
-    assert Calculator(expression).calc() == decimal.Decimal(eval(expression))
+    assert Calculator().calc(expression) == decimal.Decimal(eval(expression))
 
 
 @pytest.mark.parametrize("expression, exception",
@@ -41,7 +41,7 @@ def test_simple_ok(expression):
 )
 def test_simple_invalid_operands(expression, exception):
     with pytest.raises(exception):
-        Calculator(expression).calc()
+        Calculator().calc(expression)
 
 @pytest.mark.parametrize("expression, exception",
     [
@@ -56,4 +56,4 @@ def test_simple_invalid_operands(expression, exception):
 )
 def test_simple_invalid_expressions(expression, exception):
     with pytest.raises(exception):
-        Calculator(expression).calc()
+        Calculator().calc(expression)

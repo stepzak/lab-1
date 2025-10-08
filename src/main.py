@@ -31,7 +31,7 @@ def main():
             logger.info(f"{expression} = {result}")
         except ValueError:
             logger.error(f"Could not calculate expression {expression}: too many digits")
-            raise
+
 
 
 if __name__ == "__main__":

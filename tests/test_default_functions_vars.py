@@ -1,9 +1,8 @@
 import pytest
 from decimal import Decimal
-
-import vars
-from calculator import Calculator
-from extra.exceptions import InvalidTokenError
+from vars import OPERATORS
+from src.calculator import Calculator
+import extra.exceptions as exc
 
 @pytest.mark.parametrize("expression",
                          [
@@ -15,7 +14,7 @@ from extra.exceptions import InvalidTokenError
                          ]
 )
 def test_basic_functions(expression):
-    assert Calculator(expression).calc()==eval(expression)
+    assert Calculator().calc(expression)==eval(expression)
 
 
 @pytest.mark.parametrize("expression, expected",
@@ -23,7 +22,7 @@ def test_basic_functions(expression):
                              ("let x = 5; let y = x+5; sqrt(y+ x)**2", Decimal(15).sqrt()**2)
                          ])
 def test_vars_sqrt_bf(expression, expected):
-    assert Calculator(expression).calc()==expected
+    assert Calculator().calc(expression)==expected
 
 
 @pytest.mark.parametrize("expression, exception",
@@ -35,7 +34,7 @@ def test_vars_sqrt_bf(expression, expected):
                          ])
 def test_invalid_lets(expression, exception):
     with pytest.raises(exception):
-        Calculator(expression).calc()
+        Calculator().calc(expression)
 
 
 @pytest.mark.parametrize("expression, exception",
@@ -50,12 +49,12 @@ def test_invalid_lets(expression, exception):
                          ])
 def test_invalid_args(expression, exception):
     with pytest.raises(exception):
-        Calculator(expression).calc()
+        Calculator().calc(expression)
 
 @pytest.mark.parametrize("expression, exception",
                          [
-                             (f"let x{op} = 5;", InvalidTokenError) for op in vars.OPERATORS.keys() if op not in ["==", "!="]
+                             (f"let x{op} = 5;", exc.InvalidTokenError) for op in OPERATORS.keys() if op not in ["==", "!="]
                          ])
 def test_invalid_operators(expression, exception):
     with pytest.raises(exception):
-        Calculator(expression).calc()
+        Calculator().calc(expression)
