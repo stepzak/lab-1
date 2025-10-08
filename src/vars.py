@@ -49,7 +49,7 @@ def custom_sqrt(x: decimal.Decimal | int) -> decimal.Decimal | int:
         return int(ret)
     return ret
 
-def custom_log10(x: decimal.Decimal):
+def custom_log10(x):
     x = decimal.Decimal(x)
     return x.log10()
 

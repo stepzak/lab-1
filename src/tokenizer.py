@@ -1,10 +1,10 @@
 import string
 import logging
 
-import extra.exceptions as ex_exc
-from extra.types import Context
-from extra.utils import get_next_token, get_previous_token
-from validator import CompiledValidExpression
+import src.extra.exceptions as ex_exc
+from src.extra.types import Context
+from src.extra.utils import get_next_token, get_previous_token
+from src.validator import CompiledValidExpression
 
 
 class Tokenizer:

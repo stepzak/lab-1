@@ -1,10 +1,10 @@
 import string
-import constants as cst
-import vars
-from compiler import CompiledExpression
-from extra.exceptions import InvalidParenthesisError, VariableOvershadowError, InvalidTokenError
+import src.constants as cst
+import src.vars as vrs
+from src.compiler import CompiledExpression
+from src.extra.exceptions import InvalidParenthesisError, VariableOvershadowError, InvalidTokenError
 
-from extra.utils import CallAllMethods
+from src.extra.utils import CallAllMethods
 
 
 class PreCompiledValidExpression(CallAllMethods):
@@ -46,8 +46,8 @@ class PreCompiledValidExpression(CallAllMethods):
         """
         expr_to_check = self.expression.replace(" =", "=").strip().replace(" (", "(")
         checks = ["let let=", "def let(", "def operator(", "let operator=", "def def(", "def return(", "let return=", "let def="]
-        checks += list([f"let {dfn}=" for dfn in vars.FUNCTIONS_CALLABLE_ENUM.keys()])
-        checks += list([f"def {dfn}(" for dfn in vars.FUNCTIONS_CALLABLE_ENUM.keys()])
+        checks += list([f"let {dfn}=" for dfn in vrs.FUNCTIONS_CALLABLE_ENUM.keys()])
+        checks += list([f"def {dfn}(" for dfn in vrs.FUNCTIONS_CALLABLE_ENUM.keys()])
         for check in checks:
 
             if check in expr_to_check:

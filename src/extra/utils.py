@@ -28,7 +28,7 @@ def get_previous_token(tokens: list[str], index: int) -> str:
         return token
     return tokens[0]
 
-def get_next_token(tokens: list[str], index: int) -> str:
+def get_next_token(tokens: str, index: int) -> str:
     for token in tokens[index+1:]:
         if token.isspace():
             continue

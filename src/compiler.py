@@ -1,5 +1,5 @@
 from typing import Any, Literal
-import vars
+import src.vars as vrs
 from constants import NAME_FORBIDDEN_SYMBOLS, SYSTEM_NAMES
 from extra.exceptions import InvalidTokenError, VariableOvershadowError
 from extra.types import Variable, Context, FunctionPlaceholder, OperatorPlaceholder
@@ -28,7 +28,7 @@ def parse_function(func_expression: str) -> tuple[str, list[tuple[str, str | Non
             name += s
 
         elif ")" not in name:
-            if s in vars.OPERATORS.keys():
+            if s in vrs.OPERATORS.keys():
                 raise InvalidTokenError(f"Symbol '{s}' is forbidden for name", exc_type="forbidden_symbol")
             if s == ")":
                 name += ")"
@@ -160,7 +160,7 @@ class CompiledExpression(CallAllMethods):
         }
 
         cfg = checks_config[typeof]
-        cfg.extend([(vars.FUNCTIONS_CALLABLE_ENUM, "function"), (vars.OPERATORS, "operator")])
+        cfg.extend([(vrs.FUNCTIONS_CALLABLE_ENUM, "function"), (vrs.OPERATORS, "operator")])
 
         try:
             float(name[0])
@@ -209,7 +209,7 @@ class CompiledExpression(CallAllMethods):
                 if len(var_val) == 0:
                     raise SyntaxError(f"{var}: variable cannot be empty")
 
-                for op in vars.OPERATORS:
+                for op in vrs.OPERATORS:
                     if var_name.find(op) != -1:
                         raise InvalidTokenError(f"Variable name '{var_name}' cannot contain operators('{op}')",
                                                 exc_type="forbidden_symbol")
@@ -239,7 +239,7 @@ class CompiledExpression(CallAllMethods):
         Checks if variables and functions names do not contain operators
         :raises InvalidTokenError: function or variable name contains operators
         """
-        for op in list(self.ctx.operators.keys()) + list(vars.OPERATORS.keys()):
+        for op in list(self.ctx.operators.keys()) + list(vrs.OPERATORS.keys()):
             for func in self.ctx.functions.keys():
                 if func.find(op) != -1:
                     raise InvalidTokenError(f"Function name '{func}' cannot contain operators('{op}')",

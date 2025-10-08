@@ -4,14 +4,14 @@ import sys
 from math import floor
 from typing import Union, Any
 
-from compiler import CompiledExpression
-from extra.exceptions import InvalidTokenError
-from extra.types import Function, Operator, Variable, Context
-from extra.utils import check_is_integer, log_exception
-from tokenizer import Tokenizer
-from validator import CompiledValidExpression, PreCompiledValidExpression
-from vars import custom_log10
-import constants as cst
+from src.compiler import CompiledExpression
+from src.extra.exceptions import InvalidTokenError
+from src.extra.types import Function, Operator, Variable, Context
+from src.extra.utils import check_is_integer, log_exception
+from src.tokenizer import Tokenizer
+from src.validator import CompiledValidExpression, PreCompiledValidExpression
+from src.vars import custom_log10
+import src.constants as cst
 from decimal import getcontext
 
 getcontext().prec = cst.PRECISION
@@ -133,7 +133,7 @@ class Calculator:
                 raise SyntaxError("Unfinished line")
             del output[-2:]
 
-            op_to_run = operators[operator]
+            op_to_run: Operator = operators[operator] #type: ignore
 
             for validator in op_to_run.validators:
                 validator(a, b, op=operator)
@@ -199,8 +199,9 @@ class Calculator:
                     last_func[2].append(new_calc.calc(expression = "", tokens = last_func[1]))
 
                     args = last_func[2]
-                    func = func_map[last_func[0]].callable_function
-                    validators = func_map[last_func[0]].validators
+                    func_obj: Function = func_map[last_func[0]] #type: ignore
+                    func = func_obj.callable_function
+                    validators = func_obj.validators
 
                     for val in validators:
                         try:

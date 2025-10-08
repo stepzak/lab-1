@@ -1,9 +1,9 @@
 import decimal
 import logging
 from sys import stdout
-import constants as cst
-from calculator import Calculator
-from extra.utils import check_is_integer, round_decimal
+import src.constants as cst
+from src.calculator import Calculator
+from src.extra.utils import check_is_integer, round_decimal
 
 
 def main():
