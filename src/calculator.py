@@ -7,11 +7,11 @@ from typing import Union, Any
 
 from src.compiler import CompiledExpression
 from src.extra.exceptions import InvalidTokenError
-from src.extra.types import Function, Operator, Variable
+import src.extra.types as types
 from src.extra.context_type import Context
-from src.extra.utils import check_is_integer, log_exception
+import src.extra.utils as utils
 from src.tokenizer import Tokenizer
-from src.validator import CompiledValidExpression, PreCompiledValidExpression
+import src.validator as validator
 from src.vars import custom_log10
 import src.constants as cst
 from decimal import getcontext
@@ -43,11 +43,11 @@ class CustomFunctionExecutor:
         for i in range(len(self.indexed_vars)):
             try:
                 if args[i] is not None:
-                    ctx.variables.update({self.indexed_vars[i][0]: Variable(args[i], True)})
+                    ctx.variables.update({self.indexed_vars[i][0]: types.Variable(args[i], True)})
                 else:
                     raise IndexError
             except IndexError:
-                ctx.variables.update({self.indexed_vars[i][0]: Variable(self.indexed_vars[i][1], True)}) #type: ignore
+                ctx.variables.update({self.indexed_vars[i][0]: types.Variable(self.indexed_vars[i][1], True)}) #type: ignore
         new_calc = Calculator(ctx = ctx)
 
         return new_calc.calc(self.expression)
@@ -66,7 +66,7 @@ class Calculator:
         self.logger = logging.getLogger(__name__)
         self.logger.debug(f"ctx: {self.ctx}")
 
-    @log_exception
+    @utils.log_exception
     def calc(self, expression: str, tokens: list | None = None) -> decimal.Decimal | int | None | tuple[
         Union[decimal.Decimal, None, int], Any, Any, Any]:
         """
@@ -76,7 +76,7 @@ class Calculator:
         self.logger.debug(f"expression: {expression}")
         if not tokens:
             expression = str(expression)
-            pre_compiled = PreCompiledValidExpression(' '.join(expression.split()))
+            pre_compiled = validator.PreCompiledValidExpression.create(' '.join(expression.split()))
             c_expression = CompiledExpression(pre_compiled.expression, self.ctx)
 
             if not self.ctx.variables:
@@ -84,18 +84,18 @@ class Calculator:
             for k, v in c_expression.ctx.functions.items():
                 if not getattr(v, "callable_function", None):
                     obj = CustomFunctionExecutor(k, v.indexed_args, v.expression)  #type: ignore
-                    self.ctx.functions[k] = Function(obj.execute_function, [], v.min_args, v.max_args)
+                    self.ctx.functions[k] = types.Function(obj.execute_function, [], v.min_args, v.max_args)
             args = [('l', None), ('r', None)]
             for op_name, op_data in c_expression.ctx.operators.items():
                 if getattr(op_data, "callable_function", None):
                     continue
 
                 obj = CustomFunctionExecutor(op_name, args, op_data.expression)  # type: ignore
-                pl = Operator(op_data.priority, obj.execute_function, op_data.is_right, [])
+                pl = types.Operator(op_data.priority, obj.execute_function, op_data.is_right, [])
                 self.logger.debug(f"setting new operator {op_name} as {pl}")
                 self.ctx.operators[op_name] = pl
 
-            compiled_expression = CompiledValidExpression(c_expression)
+            compiled_expression = validator.CompiledValidExpression(c_expression)
 
             self.logger.debug(f"{compiled_expression.expression=}")
             tokenizer = Tokenizer(ctx = self.ctx, logger = self.logger)
@@ -135,11 +135,12 @@ class Calculator:
                 raise SyntaxError("Unfinished line")
             del output[-2:]
 
-            op_to_run: Operator = operators[operator] #type: ignore
+            op_to_run: types.Operator = operators[operator] #type: ignore
+            to_app = self.ctx.cache.get((operator, (a, b)))
+            if not to_app:
+                for valid in op_to_run.validators:
+                    valid(a, b, op=operator)
 
-            for validator in op_to_run.validators:
-                validator(a, b, op=operator)
-            try:
                 if a != 0 and b != 0:
                     abs_a, abs_b = abs(a), abs(b)  # type: ignore
                     if operator == "**":
@@ -157,25 +158,26 @@ class Calculator:
 
                     if n_digits > cst.MAXIMUM_DIGITS:
                         raise ValueError(
-                            f"Operation {a} {operator} {b} will lead to at leat {n_digits} out of maximum of {cst.MAXIMUM_DIGITS}")
+                            f"Operation {a} {operator} {b} will lead to at leat {n_digits} digits out of maximum of {cst.MAXIMUM_DIGITS}")
 
                     if n_digits > cst.MAXIMUM_DIGITS_WARNING:
                         self.logger.warning(
-                            f"Operation {a} {operator} {b} will lead to at least {n_digits}(warning set on {cst.MAXIMUM_DIGITS_WARNING})")
+                            f"Operation {a} {operator} {b} will lead to at least {n_digits} digits(warning set on {cst.MAXIMUM_DIGITS_WARNING})")
+                try:
+                    to_app = decimal.Decimal(op_to_run.callable_function(a, b))
+                    if utils.check_is_integer(to_app):
+                        to_app = int(to_app)  # type: ignore
+                except decimal.InvalidOperation:
+                    raise TypeError(f"Cannot apply {operator} to '{a}' and '{b}'")
+                except TypeError:
+                    to_app = op_to_run.callable_function(a, b, ctx = self.ctx)
+                    to_app = decimal.Decimal(to_app)
+                    if utils.check_is_integer(to_app):
+                        to_app = int(to_app)  # type: ignore
+                self.ctx.cache[(operator, (a, b))] = to_app
+            output.append(to_app)
 
-                to_app = decimal.Decimal(op_to_run.callable_function(a, b))
-                if check_is_integer(to_app):
-                    to_app = int(to_app)  # type: ignore
-                output.append(to_app)
-            except TypeError:
-                to_app = op_to_run.callable_function(a, b, ctx = self.ctx)
-                to_app = decimal.Decimal(to_app)
-                if check_is_integer(to_app):
-                    to_app = int(to_app)  # type: ignore
-                output.append(to_app)
 
-            except decimal.InvalidOperation:
-                raise TypeError(f"Cannot apply {operator} to '{a}' and '{b}'")
 
         for t in self.tokens:
             if t.isspace():
@@ -201,7 +203,7 @@ class Calculator:
                     last_func[2].append(new_calc.calc(expression = "", tokens = last_func[1]))
 
                     args = last_func[2]
-                    func_obj: Function = func_map[last_func[0]] #type: ignore
+                    func_obj: types.Function = func_map[last_func[0]] #type: ignore
                     func = func_obj.callable_function
                     validators = func_obj.validators
 
@@ -210,18 +212,21 @@ class Calculator:
                             val(*args, op=last_func[0])
                         except Exception:
                             raise
-                    if len(args) == 1:
-                        self.logger.debug(f"Calling function {last_func[0]}({args[0]})")
-                        try:
-                            res = func(args[0], ctx = self.ctx)
-                        except TypeError:
-                            res = func(args[0])
-                    else:
-                        self.logger.debug(f"Calling function {last_func[0]}({args})")
-                        try:
-                            res = func(*args, ctx = self.ctx)
-                        except TypeError:
-                            res = func(*args)
+                    res = self.ctx.cache.get((last_func[0], tuple(args)))
+                    if not res:
+                        if len(args) == 1:
+                            self.logger.debug(f"Calling function {last_func[0]}({args[0]})")
+                            try:
+                                res = func(args[0], ctx = self.ctx)
+                            except TypeError:
+                                res = func(args[0])
+                        else:
+                            self.logger.debug(f"Calling function {last_func[0]}({args})")
+                            try:
+                                res = func(*args, ctx = self.ctx)
+                            except TypeError:
+                                res = func(*args)
+                        self.ctx.cache[(last_func[0], tuple(args))] = res
                     stack_functions.pop()
                     if len(stack_functions):
                         stack_functions[-1][1].append(str(res))
@@ -234,7 +239,7 @@ class Calculator:
             else:
                 try:
                     to_app = decimal.Decimal(t)
-                    if check_is_integer(to_app):
+                    if utils.check_is_integer(to_app):
                         to_app = int(to_app)  # type: ignore
                     output.append(to_app)
                     continue
@@ -242,14 +247,18 @@ class Calculator:
 
                     if t in var_map.keys():
                         var = var_map[t]
+                        result = None
                         if not var.local:
+                            result = self.ctx.cache.get((t, ()))
                             self.ctx.outer_names_buffer.append(t)
-                        cls = Calculator(self.ctx)
-                        result = cls.calc(var.value)
+                        if not result:
+                            cls = Calculator(self.ctx)
+                            result = cls.calc(var.value)
+                            self.ctx.cache[(t, ())] = result
                         if not var.local:
                             self.ctx.outer_names_buffer.pop()
                         to_app = decimal.Decimal(result)
-                        if check_is_integer(to_app):
+                        if utils.check_is_integer(to_app):
                             to_app = int(to_app)  # type: ignore
                         output.append(to_app)
                     elif t == "(":

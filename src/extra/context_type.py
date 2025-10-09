@@ -1,3 +1,4 @@
+import decimal
 from dataclasses import dataclass, field
 from extra.types import Variable, Function, Operator, FunctionPlaceholder, OperatorPlaceholder
 
@@ -22,3 +23,4 @@ class Context:
     functions: dict[str, Function | FunctionPlaceholder] = field(default_factory = default_functions)
     operators: dict[str, Operator | OperatorPlaceholder] = field(default_factory= default_operators)
     outer_names_buffer: list[str] = field(default_factory=list)
+    cache: dict[tuple[str, tuple], decimal.Decimal | int] = field(default_factory=dict)

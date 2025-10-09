@@ -7,7 +7,7 @@ from src.extra.exceptions import InvalidParenthesisError, VariableOvershadowErro
 from src.extra.utils import CallAllMethods
 
 
-class PreCompiledValidExpression(CallAllMethods):
+class PreCompiledValidExpression:
     """
     CLass to validate pre compiled expression
     :param expression: expression to validate
@@ -16,8 +16,21 @@ class PreCompiledValidExpression(CallAllMethods):
     """
     def __init__(self, expression: str):
         self.expression = str(expression)
+        self.is_valid = False
 
-        self.call_all_methods()
+    @classmethod
+    def create(cls, expression: str) -> "PreCompiledValidExpression":
+        """
+        Фабричный метод с валидацией при создании
+        """
+        instance = cls(expression)
+        instance._validate()
+        return instance
+
+    def _validate(self) -> None:
+        self._check_parenthesis()
+        self._check_vars_and_funcs()
+        self.is_valid = True
 
     def _check_parenthesis(self) -> None:
         """
