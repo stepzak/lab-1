@@ -3,7 +3,7 @@ import decimal
 import logging
 import sys
 from math import floor
-from typing import Union, Any
+from typing import Union
 
 from src.compiler import CompiledExpression
 from src.extra.exceptions import InvalidTokenError
@@ -61,14 +61,13 @@ class Calculator:
     """
 
     def __init__(self, ctx: Context | None = None):
-        self.ctx = ctx or Context()
+        self.ctx = copy.deepcopy(ctx) or Context()
         self.tokens = ['  ']
         self.logger = logging.getLogger(__name__)
         self.logger.debug(f"ctx: {self.ctx}")
 
     @log_exception
-    def calc(self, expression: str, tokens: list | None = None) -> decimal.Decimal | int | None | tuple[
-        Union[decimal.Decimal, None, int], Any, Any, Any]:
+    def calc(self, expression: str, tokens: list | None = None) -> decimal.Decimal | int | None:
         """
         Calculates value of the expression
         :return: value of expression. Value can be returned as None if an error occurred during calculation process
@@ -105,79 +104,132 @@ class Calculator:
         else:
             self.tokens = tokens
 
-        result = self.rpn_and_calc()
-
+        rpn = self.rpn()
+        result = self.calc_rpn(rpn)
         if type(result) is int:
             return result
+        result = decimal.Decimal(result)
         return result
 
-    def rpn_and_calc(self) -> decimal.Decimal | None | int:
-        """
-        Converts list of tokens to RPN and then calcs their value
-        :return: value of RPN-converted tokens
-        """
+    def calc_rpn(self, rpn: list[str | int | list]): # [1, 2, '+', 'max', [1, 3, '+', ',', 'min', [1, ',', 3] ] ]
         operators = self.ctx.operators
         ops = operators.keys()
-
-        output: list[Union[decimal.Decimal, int]] = []
-        stack_ops: list[str] = []  # list of operations
-        stack_functions: list[tuple[str, list, list]] = []  # {function}, {tokens}, {args}
-
         func_map = self.ctx.functions
         funcs = func_map.keys()
 
         var_map = self.ctx.variables
 
-        def call_operator(operator: str):
+        def call_current_operator():
             try:
-                a, b = output[-2], output[-1]
+                operator = rpn.pop(i)
+                a = rpn.pop(i-1)
+                b = rpn.pop(i-2)
             except IndexError:
                 raise SyntaxError("Unfinished line")
-            del output[-2:]
 
             op_to_run: Operator = operators[operator] #type: ignore
 
             for validator in op_to_run.validators:
                 validator(a, b, op=operator)
+
+            if a != 0 and b != 0:
+                abs_a, abs_b = abs(a), abs(b)  # type: ignore
+                if operator == "**":
+                    n_digits: decimal.Decimal = b * custom_log10(abs_a)
+                elif operator == "*":
+                    n_digits = custom_log10(abs_a) + custom_log10(abs_b)
+                elif operator in ["/", "//"]:
+                    n_digits = custom_log10(abs_a) - custom_log10(abs_b)
+
+                elif operator == "+":
+                    n_digits = max(custom_log10(abs_a), custom_log10(abs_b))
+                else:
+                    n_digits = decimal.Decimal(-1)
+                n_digits = floor(n_digits) + 1 #type: ignore
+
+                if n_digits > cst.MAXIMUM_DIGITS:
+                    raise ValueError(
+                        f"Operation {a} {operator} {b} will lead to at leat {n_digits} out of maximum of {cst.MAXIMUM_DIGITS}")
+
+                if n_digits > cst.MAXIMUM_DIGITS_WARNING:
+                    self.logger.warning(
+                        f"Operation {a} {operator} {b} will lead to at least {n_digits}(warning set on {cst.MAXIMUM_DIGITS_WARNING})")
             try:
-                if a != 0 and b != 0:
-                    abs_a, abs_b = abs(a), abs(b)  # type: ignore
-                    if operator == "**":
-                        n_digits: decimal.Decimal = b * custom_log10(abs_a)
-                    elif operator == "*":
-                        n_digits = custom_log10(abs_a) + custom_log10(abs_b)
-                    elif operator in ["/", "//"]:
-                        n_digits = custom_log10(abs_a) - custom_log10(abs_b)
-
-                    elif operator == "+":
-                        n_digits = max(custom_log10(abs_a), custom_log10(abs_b))
-                    else:
-                        n_digits = decimal.Decimal(-1)
-                    n_digits = floor(n_digits) + 1 #type: ignore
-
-                    if n_digits > cst.MAXIMUM_DIGITS:
-                        raise ValueError(
-                            f"Operation {a} {operator} {b} will lead to at leat {n_digits} out of maximum of {cst.MAXIMUM_DIGITS}")
-
-                    if n_digits > cst.MAXIMUM_DIGITS_WARNING:
-                        self.logger.warning(
-                            f"Operation {a} {operator} {b} will lead to at least {n_digits}(warning set on {cst.MAXIMUM_DIGITS_WARNING})")
 
                 to_app = decimal.Decimal(op_to_run.callable_function(a, b))
-                if check_is_integer(to_app):
-                    to_app = int(to_app)  # type: ignore
-                output.append(to_app)
             except TypeError:
                 to_app = op_to_run.callable_function(a, b, ctx = self.ctx)
                 to_app = decimal.Decimal(to_app)
-                if check_is_integer(to_app):
-                    to_app = int(to_app)  # type: ignore
-                output.append(to_app)
-
             except decimal.InvalidOperation:
                 raise TypeError(f"Cannot apply {operator} to '{a}' and '{b}'")
+            if check_is_integer(to_app):
+                to_app = int(to_app)  # type: ignore
+            rpn.insert(i, to_app)
 
-        for t in self.tokens:
+
+        i = -1
+        while i < len(rpn)-1:
+            i+=1
+            t = rpn[i]
+            if t in var_map.keys():
+                v = var_map[t] #type: ignore
+                new_calc = Calculator(self.ctx)
+                var_val = new_calc.calc(v.value)
+                rpn[i] = var_val
+
+            elif t in ops:
+                call_current_operator()
+
+            elif t in funcs:
+                current_tokens = [] #type: ignore
+                current_args = []
+                for arg in rpn[i+1]: #type: ignore
+                    if arg == ',':
+                        new_calc = Calculator(self.ctx)
+                        arg_val = new_calc.calc_rpn(current_tokens)
+                        current_args.append(arg_val)
+                        current_tokens.clear()
+                    else:
+                        current_tokens.append(arg)
+
+                new_calc = Calculator(self.ctx)
+                arg_val = new_calc.calc_rpn(copy.deepcopy(current_tokens))
+                current_args.append(arg_val)
+                current_tokens.clear()
+                func = func_map[t] #type: ignore
+                try:
+                    res = func.callable_function(*current_args, ctx = self.ctx)
+                except TypeError:
+                    res = func.callable_function(*current_args)
+
+                rpn.insert(i, res)
+                del rpn[i+1:i + 3]
+
+        call_current_operator()
+        return rpn[0]
+
+
+
+
+    def rpn(self, tokens: list | None = None) -> list:
+        """
+        Converts list of tokens to RPN and then calcs their value
+        :return: value of RPN-converted tokens
+        """
+        if not tokens:
+            tokens = self.tokens
+        operators = self.ctx.operators
+        ops = operators.keys()
+        func_map = self.ctx.functions
+        funcs = func_map.keys()
+
+        var_map = self.ctx.variables
+        output = []
+        stack_ops: list[str] = []  # list of operations
+        stack_functions: list[tuple[str, list, list]] = []  # {function}, {tokens}, {args}
+
+
+        for t in tokens:
             if t.isspace():
                 continue
 
@@ -192,66 +244,32 @@ class Calculator:
                     continue
 
                 elif t == ',':
-                    new_calc = Calculator(self.ctx)
-                    last_func[2].append(new_calc.calc(expression = "", tokens = last_func[1]))
+                    last_func[2].extend(self.rpn(last_func[1])+[","])
                     last_func[1].clear()
 
                 elif t == "]":
-                    new_calc = Calculator(self.ctx)
-                    last_func[2].append(new_calc.calc(expression = "", tokens = last_func[1]))
 
-                    args = last_func[2]
-                    func_obj: Function = func_map[last_func[0]] #type: ignore
-                    func = func_obj.callable_function
-                    validators = func_obj.validators
+                    last_func[2].extend(self.rpn(last_func[1]))
 
-                    for val in validators:
-                        try:
-                            val(*args, op=last_func[0])
-                        except Exception:
-                            raise
-                    if len(args) == 1:
-                        self.logger.debug(f"Calling function {last_func[0]}({args[0]})")
-                        try:
-                            res = func(args[0], ctx = self.ctx)
-                        except TypeError:
-                            res = func(args[0])
-                    else:
-                        self.logger.debug(f"Calling function {last_func[0]}({args})")
-                        try:
-                            res = func(*args, ctx = self.ctx)
-                        except TypeError:
-                            res = func(*args)
                     stack_functions.pop()
                     if len(stack_functions):
-                        stack_functions[-1][1].append(str(res))
+                        stack_functions[-1][1].extend([last_func[0], last_func[2]])
                     else:
-                        output.append(res)
+                        output.extend([last_func[0], last_func[2] ])
 
                 else:
                     last_func[1].append(t)
-
             else:
                 try:
                     to_app = decimal.Decimal(t)
                     if check_is_integer(to_app):
                         to_app = int(to_app)  # type: ignore
-                    output.append(to_app)
+                    output.append(to_app) #type: ignore
                     continue
                 except decimal.InvalidOperation:
 
                     if t in var_map.keys():
-                        var = var_map[t]
-                        if not var.local:
-                            self.ctx.outer_names_buffer.append(t)
-                        cls = Calculator(self.ctx)
-                        result = cls.calc(var.value)
-                        if not var.local:
-                            self.ctx.outer_names_buffer.pop()
-                        to_app = decimal.Decimal(result)
-                        if check_is_integer(to_app):
-                            to_app = int(to_app)  # type: ignore
-                        output.append(to_app)
+                        output.append(t)
                     elif t == "(":
                         stack_ops.append(t)
                     elif t in ops:
@@ -263,7 +281,7 @@ class Calculator:
                             prev_op = operators[prev]
                             cur_op = operators[t]
                             while (-2 * (prev_op.is_right is True and cur_op.is_right is True) + 1) * prev_op.priority >= cur_op.priority:
-                                call_operator(stack_ops.pop())
+                                output.append(stack_ops.pop())
                                 if not len(stack_ops) or stack_ops[-1] == "(":
                                     break
                         stack_ops.append(t)
@@ -272,7 +290,7 @@ class Calculator:
                             op = stack_ops.pop()
                             if len(output) == 1:
                                 raise SyntaxError("Unfinished line")
-                            call_operator(op)
+                            output.append(op)
                             if not len(stack_ops) or stack_ops[-1] == "(":
                                 break
                         stack_ops.pop()
@@ -280,10 +298,6 @@ class Calculator:
                         raise InvalidTokenError(f"Unknown token: '{t}'", exc_type="unknown_token")
 
         for op in stack_ops[::-1]:
-            call_operator(op)
+            output.append(op)
 
-        if len(output) >= 1:
-            if len(output) == 1:
-                return output[0]
-            raise SyntaxError(f"Unfinished line, some numbers left without operations: {output}")
-        return None
+        return output
