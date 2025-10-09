@@ -18,6 +18,7 @@ class Context:
     :param variables: map from variable name to Variable dataclass
     :param functions: map from function name to Function dataclass
     :param operators: map from operator name to Operator dataclass
+    :param cache: cached data map - (name, (args,) ): value
     """
     variables: dict[str, Variable] = field(default_factory=dict)
     functions: dict[str, Function | FunctionPlaceholder] = field(default_factory = default_functions)
