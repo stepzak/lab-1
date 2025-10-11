@@ -66,7 +66,6 @@ def init_default_ctx(cls):
         for k, v in inspect.signature(init_original).parameters.items():
 
             if get_origin(v.annotation) is UnionType:
-                print(get_args(v.annotation)[0], get_args(v.annotation)[0] == Context)
                 if Context in get_args(v.annotation):
                     ctx_have = kwargs.get(k, Context(functions={}, operators={}, outer_names_buffer=[], cache={}))
                     if not ctx_have.operators:
