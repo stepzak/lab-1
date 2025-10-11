@@ -3,7 +3,7 @@ import decimal
 import pytest
 
 from src.extra.exceptions import InvalidTokenError, InvalidParenthesisError
-from calculator import Calculator
+from src.calculator import Calculator
 
 
 @pytest.mark.parametrize(

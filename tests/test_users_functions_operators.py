@@ -1,7 +1,7 @@
 import pytest
 
-from calculator import Calculator
-import extra.exceptions as exc
+from src.calculator import Calculator
+import src.extra.exceptions as exc
 
 @pytest.mark.parametrize("expression, exception",
                          [

@@ -2,7 +2,9 @@ import decimal
 import math
 
 from extra.types import Operator, Function
-from extra.utils import check_is_integer
+
+def check_is_integer(dec: decimal.Decimal) -> bool:
+    return dec.as_integer_ratio()[1] == 1.0
 
 def pow_validator(*args, **kwargs):
     if len(args) == 3:

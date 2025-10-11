@@ -2,7 +2,7 @@ import pytest
 from decimal import Decimal
 from vars import OPERATORS
 from src.calculator import Calculator
-import extra.exceptions as exc
+import src.extra.exceptions as exc
 
 @pytest.mark.parametrize("expression",
                          [

@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+import decimal
+from dataclasses import dataclass, field
 from typing import Callable
 
 
@@ -56,3 +57,18 @@ class Variable:
     """
     value: str
     local: bool = False
+
+@dataclass
+class Context:
+    """
+    Class representing a context
+    :param variables: map from variable name to Variable dataclass
+    :param functions: map from function name to Function dataclass
+    :param operators: map from operator name to Operator dataclass
+    :param cache: cached data map - (name, (args,) ): value
+    """
+    functions: dict[str, Function | FunctionPlaceholder]
+    operators: dict[str, Operator | OperatorPlaceholder]
+    outer_names_buffer: list[str]
+    cache: dict[tuple[str, tuple], decimal.Decimal | int]
+    variables: dict[str, Variable] = field(default_factory=dict)

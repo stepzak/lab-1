@@ -1,10 +1,9 @@
 from typing import Any, Literal
 from src.vars import FUNCTIONS_CALLABLE_ENUM, OPERATORS
 from constants import NAME_FORBIDDEN_SYMBOLS, SYSTEM_NAMES
-from extra.exceptions import InvalidTokenError, VariableOvershadowError
-from extra.types import Variable, FunctionPlaceholder, OperatorPlaceholder
-from extra.context_type import Context
-from extra.utils import CallAllMethods
+from src.extra.exceptions import InvalidTokenError, VariableOvershadowError
+from src.extra.types import Variable, FunctionPlaceholder, OperatorPlaceholder, Context
+from src.extra.utils import CallAllMethods, init_default_ctx
 
 
 def parse_function(func_expression: str) -> tuple[str, list[tuple[str, str | None]], str, int | Any, int] | None:
@@ -125,21 +124,21 @@ def parse_operator(operator_expression: str):  # operator '->': 1, l+r*4-1,false
                 raise InvalidTokenError("Operator sign cannot contain whitespaces", exc_type="forbidden_symbol")
     return None
 
-
+@init_default_ctx
 class CompiledExpression(CallAllMethods):
     """
     Class that contains expression with its names scope
     :param expression: mathematical expression
-    :param context: Context
+    :param ctx: Context
     :raises SyntaxError: Invalid syntax for defining
     :raises ValueError: non-default args after default ones in function defining
     :raises VariableOvershadowError: one name overshadows default ones or multiple definition types with the same names(e.g. 'let f = 5; def f(x): return x')
     """
 
-    def __init__(self, expression: str, context: Context = None):
+    def __init__(self, expression: str, *, ctx: Context | None = None):
         self.expression = expression
         self.expression = self.expression.replace(",)", ")")
-        self.ctx = context or Context()
+        self.ctx = ctx or Context({}, {}, [], {})
         self.call_all_methods()
 
     def __check_valid_name(self, name: str, typeof: Literal["operator", "function", "variable", "argument"]):

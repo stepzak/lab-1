@@ -1,6 +1,13 @@
+import copy
 import decimal
 from functools import wraps
+from types import UnionType
+
 import src.constants as cst
+import inspect
+import src.vars as vrs
+from src.extra.types import Context
+from typing import get_args, get_origin
 
 def check_is_integer(dec: decimal.Decimal) -> bool:
     return dec.as_integer_ratio()[1] == 1.0
@@ -50,6 +57,26 @@ def log_exception(func):
             raise
 
     return wrapper
+
+
+def init_default_ctx(cls):
+
+    init_original = cls.__init__
+    def new_init(*args, **kwargs):
+        for k, v in inspect.signature(init_original).parameters.items():
+
+            if get_origin(v.annotation) is UnionType:
+                print(get_args(v.annotation)[0], get_args(v.annotation)[0] == Context)
+                if Context in get_args(v.annotation):
+                    ctx_have = kwargs.get(k, Context(functions={}, operators={}, outer_names_buffer=[], cache={}))
+                    if not ctx_have.operators:
+                        ctx_have.operators = vrs.OPERATORS
+                    if not ctx_have.functions:
+                        ctx_have.functions = vrs.FUNCTIONS_CALLABLE_ENUM
+                    kwargs[k] = copy.deepcopy(ctx_have)
+        return init_original(*args, **kwargs)
+    cls.__init__ = new_init
+    return cls
 
 
 class CallAllMethods:
